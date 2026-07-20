@@ -1,0 +1,30 @@
+{
+  "name": "gladys-tp-link",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Control your TP-Link Kasa smart plugs, switches and bulbs from Gladys Assistant (external integration).",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@gladysassistant/integration-sdk": "^0.5.0",
+    "tplink-smarthome-api": "^5.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.3.0"
+  },
+  "license": "Apache-2.0"
+}

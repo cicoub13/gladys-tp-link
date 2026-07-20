@@ -1,0 +1,74 @@
+// -----------------------------------------------------------------------------
+// Resolve the runtime facts a command needs about a device: its IP address and
+// its controllable feature.
+//
+// The device object Gladys hands to onSetValue / onPoll may be lightweight, so
+// — like the core, which re-read `gladys.device.get({ service })` — we make sure
+// we hold the full device (with `params` and `features`), falling back to
+// `gladys.getDevices()` when needed.
+// -----------------------------------------------------------------------------
+
+import { DEVICE_FEATURE_CATEGORIES } from '@gladysassistant/integration-sdk';
+import { PARAMS } from './constants.js';
+
+/**
+ * Read a device param value by name.
+ * @param {object} device - A Gladys device.
+ * @param {string} name - The param name.
+ * @returns {string|undefined} The value, or undefined when absent.
+ * @example
+ * getParam(device, PARAMS.IP_ADDRESS);
+ */
+export function getParam(device, name) {
+  return device?.params?.find((p) => p.name === name)?.value;
+}
+
+/**
+ * Ensure we hold the full device (params + features). Falls back to a fresh
+ * `gladys.getDevices()` when the passed object is incomplete.
+ * @param {object} gladys - The GladysIntegration SDK instance.
+ * @param {object} device - The (possibly lightweight) device from an event.
+ * @returns {Promise<object>} The fullest device available.
+ * @example
+ * const full = await resolveDevice(gladys, device);
+ */
+export async function resolveDevice(gladys, device) {
+  const hasParams = Array.isArray(device?.params) && device.params.length > 0;
+  const hasFeatures = Array.isArray(device?.features) && device.features.length > 0;
+  if (hasParams && hasFeatures) {
+    return device;
+  }
+  const all = await gladys.getDevices();
+  return all.find((d) => d.external_id === device.external_id) || device;
+}
+
+/**
+ * Resolve the IP address of a device.
+ * @param {object} gladys - The GladysIntegration SDK instance.
+ * @param {object} device - The device from an event.
+ * @returns {Promise<string>} The device IP address.
+ * @throws {Error} When the device carries no IP address param.
+ * @example
+ * const host = await resolveHost(gladys, device);
+ */
+export async function resolveHost(gladys, device) {
+  const full = await resolveDevice(gladys, device);
+  const host = getParam(full, PARAMS.IP_ADDRESS);
+  if (!host) {
+    throw new Error(`No IP address stored for device ${device.external_id}`);
+  }
+  return host;
+}
+
+/**
+ * Find the ON/OFF feature of a TP-Link device (a switch or a light binary).
+ * @param {object} device - A full Gladys device (with features).
+ * @returns {object|undefined} The controllable feature, or undefined.
+ * @example
+ * const feature = findOnOffFeature(full);
+ */
+export function findOnOffFeature(device) {
+  return device?.features?.find(
+    (f) => f.category === DEVICE_FEATURE_CATEGORIES.SWITCH || f.category === DEVICE_FEATURE_CATEGORIES.LIGHT,
+  );
+}
