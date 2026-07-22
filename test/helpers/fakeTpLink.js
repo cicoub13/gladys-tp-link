@@ -3,10 +3,9 @@
 //
 //   - getSysInfo(host)       -> returns the sysinfo mapped to that host, or throws
 //   - setPowerState(host,on) -> records the command
-//   - discoverBroadcast()    -> returns the injected broadcast responders
 // -----------------------------------------------------------------------------
 
-export function createFakeTpLink({ byHost = {}, broadcast = [] } = {}) {
+export function createFakeTpLink({ byHost = {} } = {}) {
   const powerCommands = [];
 
   return {
@@ -22,10 +21,6 @@ export function createFakeTpLink({ byHost = {}, broadcast = [] } = {}) {
 
     async setPowerState(host, on) {
       powerCommands.push({ host, on });
-    },
-
-    async discoverBroadcast() {
-      return broadcast;
     },
   };
 }

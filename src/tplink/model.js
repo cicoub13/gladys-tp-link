@@ -51,7 +51,10 @@ export function buildDevice(gladys, sysInfo, host, config) {
   const device = {
     name: alias,
     external_id: ids.device,
-    poll_frequency: config.poll_frequency,
+    // Gladys core only accepts a poll_frequency in milliseconds, from a closed
+    // set (1/2/10/15/30/60s) — config.poll_frequency is validated against that
+    // same set, in seconds (see src/config.js).
+    poll_frequency: config.poll_frequency * 1000,
     params: [
       { name: PARAMS.IP_ADDRESS, value: host },
       { name: PARAMS.SERIAL_NUMBER, value: sysInfo.deviceId },

@@ -25,40 +25,22 @@
     },
     {
       "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "type": "select",
+      "label": { "en": "Refresh interval", "fr": "Intervalle de rafraîchissement" },
       "description": {
-        "en": "How often each device is polled to refresh its state, in seconds.",
-        "fr": "Fréquence d'interrogation de chaque appareil pour rafraîchir son état, en secondes."
+        "en": "How often each device is polled to refresh its state.",
+        "fr": "Fréquence d'interrogation de chaque appareil pour rafraîchir son état."
       },
       "required": false,
-      "default": 60,
-      "min": 10,
-      "max": 3600
-    },
-    {
-      "key": "broadcast_discovery",
-      "type": "boolean",
-      "label": { "en": "Attempt LAN broadcast discovery", "fr": "Tenter la découverte par diffusion réseau" },
-      "description": {
-        "en": "In addition to the IP list, try a UDP broadcast scan. Only works if the container can receive LAN broadcasts (e.g. host networking).",
-        "fr": "En plus de la liste d'IP, tenter un scan par diffusion UDP. Ne fonctionne que si le conteneur peut recevoir les diffusions réseau (ex. réseau hôte)."
-      },
-      "required": false,
-      "default": true
-    },
-    {
-      "key": "discovery_timeout",
-      "type": "number",
-      "label": { "en": "Broadcast scan duration (s)", "fr": "Durée du scan par diffusion (s)" },
-      "description": {
-        "en": "How long the broadcast discovery listens for device responses, in seconds.",
-        "fr": "Durée d'écoute des réponses des appareils pendant la découverte par diffusion, en secondes."
-      },
-      "required": false,
-      "default": 5,
-      "min": 1,
-      "max": 30
+      "default": "60",
+      "options": [
+        { "value": "1", "label": { "en": "Every second", "fr": "Toutes les secondes" } },
+        { "value": "2", "label": { "en": "Every 2 seconds", "fr": "Toutes les 2 secondes" } },
+        { "value": "10", "label": { "en": "Every 10 seconds", "fr": "Toutes les 10 secondes" } },
+        { "value": "15", "label": { "en": "Every 15 seconds", "fr": "Toutes les 15 secondes" } },
+        { "value": "30", "label": { "en": "Every 30 seconds", "fr": "Toutes les 30 secondes" } },
+        { "value": "60", "label": { "en": "Every minute", "fr": "Toutes les minutes" } }
+      ]
     }
   ],
   "actions": [

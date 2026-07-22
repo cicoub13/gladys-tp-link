@@ -29,18 +29,14 @@ published (no controllable feature). This matches what the core service handles.
 ## How discovery works (important)
 
 The integration runs in a **sandboxed bridge-network container**. From there it
-can reach a device by **unicast** (a known IP address), but it usually **cannot
-receive the UDP broadcast responses** that classic Kasa auto-discovery relies on.
-
-So there are two discovery paths:
-
-1. **Configured IP list (recommended, reliable).** Enter your devices' IP
-   addresses in the integration configuration (`Device IP addresses`). On a scan,
-   each IP is probed by unicast and the device is published to the **Discovery**
-   tab. Give your Kasa devices a DHCP reservation so their IP is stable.
-2. **LAN broadcast (best-effort bonus).** If your deployment gives the container
-   access to LAN broadcasts (e.g. host networking), the `broadcast_discovery`
-   option adds any device that answers the broadcast.
+can reach a device by **unicast** (a known IP address), but it cannot receive the
+UDP broadcast responses that classic Kasa auto-discovery relies on — and Gladys'
+mediated `udp-broadcast` network discovery only _passively listens_, it never
+sends the active probe Kasa devices require to answer. So the only discovery
+path is the **configured IP list**: enter your devices' IP addresses in the
+integration configuration (`Device IP addresses`); on a scan, each IP is probed
+by unicast and the device is published to the **Discovery** tab. Give your Kasa
+devices a DHCP reservation so their IP is stable.
 
 Use the **Test a device by IP** action button in the Configuration screen to
 confirm a device is reachable from the container before adding its IP.
@@ -55,12 +51,10 @@ confirm a device is reachable from the container before adding its IP.
 
 ## Configuration
 
-| Key                   | Type    | Default | Description                                                      |
-| --------------------- | ------- | ------- | ---------------------------------------------------------------- |
-| `device_ips`          | string  | `''`    | Comma / space separated list of device IP addresses.             |
-| `poll_frequency`      | number  | `60`    | How often each device is polled, in seconds (10–3600).           |
-| `broadcast_discovery` | boolean | `true`  | Also attempt a LAN UDP-broadcast scan (works only if reachable). |
-| `discovery_timeout`   | number  | `5`     | Broadcast scan duration, in seconds (1–30).                      |
+| Key              | Type   | Default | Description                                                                                                                                                                         |
+| ---------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `device_ips`     | string | `''`    | Comma / space separated list of device IP addresses.                                                                                                                                |
+| `poll_frequency` | select | `60`    | How often each device is polled, in seconds. One of `1`, `2`, `10`, `15`, `30`, `60` — the only values Gladys core accepts on a published device (in milliseconds, under the hood). |
 
 ## Project structure
 
@@ -71,7 +65,7 @@ confirm a device is reachable from the container before adding its IP.
 │  ├─ config.js                      # config defaults, normalization, IP parsing
 │  ├─ constants.js                   # external-id kinds, feature keys, param names
 │  ├─ utils.js                       # mapLimit (bounded-concurrency probing)
-│  ├─ discovery.js                   # scan: broadcast + IP probe -> discovery payloads
+│  ├─ discovery.js                   # scan: IP probe -> discovery payloads
 │  ├─ deviceLookup.js                # resolve a device's IP and ON/OFF feature
 │  ├─ setValue.js                    # onSetValue: ON/OFF command
 │  ├─ poll.js                        # onPoll: refresh state

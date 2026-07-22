@@ -2,13 +2,9 @@
 // Device discovery — the external-integration counterpart of the core
 // `smart-device.getDevices.js`.
 //
-// Two sources, merged and de-duplicated by the device serial (deviceId):
-//   1. the configured IP list, probed by unicast (reliable from a bridge
-//      container — this is the path that actually works in the sandbox);
-//   2. a best-effort LAN UDP-broadcast scan (a bonus for hosts that let the
-//      container receive the broadcast responses).
-//
-// The result is the list of discovery payloads to hand to
+// The configured IP list is probed by unicast (the only reliable path from a
+// bridge container) and de-duplicated by the device serial (deviceId). The
+// result is the list of discovery payloads to hand to
 // `gladys.publishDiscoveredDevices()`. Nothing is created here: the user picks
 // which discovered devices to add, from the Gladys "Discovery" tab.
 // -----------------------------------------------------------------------------
@@ -32,25 +28,10 @@ const PROBE_CONCURRENCY = 5;
  * await scan(gladys, tpClient, config);
  */
 export async function scan(gladys, tpClient, config) {
-  // deviceId -> { sysInfo, host }. A Map de-duplicates a device seen on both
-  // the broadcast and the configured IP list.
+  // deviceId -> { sysInfo, host }
   const responders = new Map();
 
-  // 1) Best-effort broadcast discovery.
-  if (config.broadcast_discovery) {
-    try {
-      const timeoutMs = Math.max(1, config.discovery_timeout) * 1000;
-      const broadcastResults = await tpClient.discoverBroadcast(timeoutMs);
-      for (const result of broadcastResults) {
-        responders.set(result.sysInfo.deviceId, result);
-      }
-      logger.info(`Broadcast discovery found ${broadcastResults.length} device(s)`);
-    } catch (err) {
-      logger.warn(`Broadcast discovery failed (ignored): ${err.message}`);
-    }
-  }
-
-  // 2) Unicast probe of every configured IP.
+  // Unicast probe of every configured IP.
   if (config.ips.length > 0) {
     await mapLimit(config.ips, PROBE_CONCURRENCY, async (host) => {
       try {
@@ -64,7 +45,7 @@ export async function scan(gladys, tpClient, config) {
     });
   }
 
-  // 3) Build the payloads, skipping the unsupported device types.
+  // Build the payloads, skipping the unsupported device types.
   const devices = [];
   for (const { sysInfo, host } of responders.values()) {
     const { kind, device } = buildDevice(gladys, sysInfo, host, config);

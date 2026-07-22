@@ -9,8 +9,7 @@
 // Why an explicit IP list matters: the integration runs in a sandboxed bridge
 // container, which can reach a LAN device by UNICAST (a known IP) but cannot
 // receive the UDP broadcast responses TP-Link discovery relies on. So the
-// reliable discovery path is the user-provided IP list; LAN broadcast is only a
-// best-effort bonus for hosts that expose it to the container.
+// reliable discovery path is the user-provided IP list.
 // -----------------------------------------------------------------------------
 
 export const DEFAULT_CONFIG = {
@@ -18,11 +17,30 @@ export const DEFAULT_CONFIG = {
   device_ips: '',
   // How often Gladys polls each device, in seconds.
   poll_frequency: 60,
-  // Attempt a LAN UDP-broadcast discovery in addition to the IP list.
-  broadcast_discovery: true,
-  // Duration of the best-effort broadcast discovery, in seconds.
-  discovery_timeout: 5,
 };
+
+// The only poll frequencies (in seconds) Gladys core accepts on a published
+// device — it validates poll_frequency in milliseconds against the closed set
+// [1000, 2000, 10000, 15000, 30000, 60000]. Any other value makes
+// publishDiscoveredDevices fail (silently: onScanRequest is an unacked SDK
+// event), so a stale/out-of-range stored value must be snapped to this set
+// rather than passed through.
+const POLL_FREQUENCIES_SECONDS = [1, 2, 10, 15, 30, 60];
+
+/**
+ * Snap a poll frequency (seconds) to the nearest value Gladys core accepts.
+ * @param {number} seconds - The requested poll frequency, in seconds.
+ * @returns {number} The nearest value among POLL_FREQUENCIES_SECONDS.
+ * @example
+ * nearestPollFrequency(45); // 60
+ */
+function nearestPollFrequency(seconds) {
+  return POLL_FREQUENCIES_SECONDS.reduce((closest, candidate) =>
+    // <= so an exact tie (e.g. 45, equidistant from 30 and 60) picks the
+    // larger, less chatty frequency.
+    Math.abs(candidate - seconds) <= Math.abs(closest - seconds) ? candidate : closest,
+  );
+}
 
 /**
  * Split a free-text list of IP addresses into a clean array.
@@ -56,9 +74,6 @@ export function normalizeConfig(raw = {}) {
     device_ips: raw.device_ips ?? DEFAULT_CONFIG.device_ips,
     // Parsed IP list, ready to probe by unicast.
     ips: parseIpList(raw.device_ips),
-    poll_frequency: Number(raw.poll_frequency ?? DEFAULT_CONFIG.poll_frequency),
-    // Any value but an explicit false means "attempt broadcast discovery".
-    broadcast_discovery: raw.broadcast_discovery !== false,
-    discovery_timeout: Number(raw.discovery_timeout ?? DEFAULT_CONFIG.discovery_timeout),
+    poll_frequency: nearestPollFrequency(Number(raw.poll_frequency ?? DEFAULT_CONFIG.poll_frequency)),
   };
 }

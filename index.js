@@ -28,10 +28,17 @@ const tpClient = createClient();
 let config = normalizeConfig();
 
 // --- Discovery: the user clicked "scan" in the Discovery tab -----------------
+// onScanRequest is an unacked SDK event: a thrown error here is otherwise
+// swallowed silently (no ack, no console output), so publishDiscoveredDevices
+// is wrapped explicitly to keep failures (e.g. a rejected payload) visible.
 gladys.onScanRequest(async () => {
   logger.info('onScanRequest -> scanning for TP-Link devices');
   const devices = await scan(gladys, tpClient, config);
-  await gladys.publishDiscoveredDevices(devices);
+  try {
+    await gladys.publishDiscoveredDevices(devices);
+  } catch (err) {
+    logger.error(`publishDiscoveredDevices failed: ${err.message}`);
+  }
 });
 
 // --- Command: the user acted on a controllable feature -----------------------

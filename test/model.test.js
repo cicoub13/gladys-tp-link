@@ -8,7 +8,7 @@ import { createFakeGladys } from './helpers/fakeGladys.js';
 import { PLUG_SYSINFO, BULB_SYSINFO, UNKNOWN_SYSINFO } from './helpers/fakeTpLink.js';
 
 const gladys = createFakeGladys();
-const config = normalizeConfig({ poll_frequency: 45 });
+const config = normalizeConfig({ poll_frequency: 30 });
 
 test('classify maps TP-Link types (type and legacy mic_type) to a kind', () => {
   assert.equal(classify({ type: 'IOT.SMARTPLUGSWITCH' }), DEVICE_KINDS.PLUG);
@@ -22,7 +22,9 @@ test('buildDevice(plug) produces a SWITCH/binary controllable feature', () => {
   assert.equal(kind, DEVICE_KINDS.PLUG);
   assert.equal(device.name, 'Office plug');
   assert.equal(device.external_id, `ext:test:plug:${PLUG_SYSINFO.deviceId}`);
-  assert.equal(device.poll_frequency, 45);
+  // Gladys core requires poll_frequency in milliseconds, from a closed set —
+  // buildDevice converts the (already-snapped) seconds value from config.
+  assert.equal(device.poll_frequency, 30000);
 
   const feature = device.features[0];
   assert.equal(feature.category, DEVICE_FEATURE_CATEGORIES.SWITCH);
