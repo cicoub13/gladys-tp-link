@@ -18,44 +18,38 @@ mais ne sont pas publiés car ils n'ont pas encore de fonctionnalité contrôlab
 > protocole LAN Kasa classique. Les firmwares Kasa récents qui n'exposent que le
 > protocole chiffré KLAP ne sont pas pris en charge.
 
-## Pourquoi vous devez saisir des adresses IP
+## Comment fonctionne la découverte
 
-L'intégration s'exécute dans un **conteneur isolé**. Depuis celui-ci, elle peut
-joindre un appareil par **unicast** (une adresse IP connue), mais elle ne peut
-pas recevoir les réponses par diffusion UDP sur lesquelles repose la découverte
-automatique Kasa. Le seul chemin de découverte est donc la **liste d'adresses IP
-configurée**.
+Les appareils Kasa ne répondent qu'à une **sonde de découverte active**, et
+l'intégration s'exécute dans un conteneur isolé qui ne peut pas diffuser sur
+votre réseau. Le scan est donc **médié par Gladys** : l'intégration forge la
+requête de découverte Kasa chiffrée, le cœur de Gladys (qui, lui, est sur votre
+réseau domestique) la diffuse en broadcast et relaie les réponses des appareils.
+Vous ne saisissez aucune adresse IP — le scan trouve vos appareils, et l'adresse
+IP depuis laquelle chacun a répondu est mémorisée pour le piloter ensuite.
 
 Attribuez à vos appareils Kasa une **réservation DHCP** sur votre routeur afin
-que leur adresse IP reste stable.
+que leur adresse IP reste stable ; si elle change, un nouveau scan récupère
+automatiquement la nouvelle adresse.
 
 ## Configuration
 
 1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Dans **Adresses IP des appareils**, saisissez les IP de vos appareils,
-   séparées par des virgules ou des espaces (par exemple
-   `192.168.1.20, 192.168.1.21`).
-3. Choisissez un **Intervalle de rafraîchissement** — la fréquence
+2. Choisissez un **Intervalle de rafraîchissement** — la fréquence
    d'interrogation de chaque appareil pour rafraîchir son état (par défaut :
-   toutes les minutes).
-4. Enregistrez.
-5. Ouvrez l'onglet **Découverte** et cliquez sur **scanner** : chaque IP
-   configurée est sondée et les appareils joignables apparaissent.
-6. Cliquez sur **créer** pour ceux que vous souhaitez ajouter. Ils apparaissent
+   toutes les minutes). Enregistrez.
+3. Ouvrez l'onglet **Découverte** et cliquez sur **scanner** : vos appareils
+   Kasa apparaissent.
+4. Cliquez sur **créer** pour ceux que vous souhaitez ajouter. Ils apparaissent
    dans l'onglet **Appareils** avec une commande Marche/Arrêt.
 
-## Actions
-
-- **Tester un appareil par IP** — saisissez une adresse IP et l'intégration
-  effectue un sondage unicast en direct, confirmant que l'appareil est joignable
-  depuis le conteneur avant d'ajouter son IP à la configuration.
+Relancez un scan à tout moment lorsque vous ajoutez un nouvel appareil.
 
 ## Dépannage
 
-- **Un appareil n'apparaît pas au scan.** Vérifiez son IP avec l'action **Tester
-  un appareil par IP**. Si le test échoue, le conteneur ne peut pas joindre cette
-  IP — vérifiez l'adresse, la réservation DHCP et que l'appareil est sur le même
-  réseau.
+- **Un appareil n'apparaît pas au scan.** Vérifiez qu'il est allumé et sur le
+  même réseau/sous-réseau que votre hôte Gladys, puis relancez un scan. Seuls les
+  appareils Kasa au protocole classique répondent (voir ci-dessous).
 - **Un appareil apparaît mais ne change jamais d'état.** Son firmware ne parle
   peut-être que le protocole KLAP récent, non pris en charge.
 - **Besoin de plus de détails ?** L'intégration journalise tout ce qu'elle fait.

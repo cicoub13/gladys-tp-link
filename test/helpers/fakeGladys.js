@@ -3,22 +3,30 @@
 //
 // Reproduces only the surface the integration relies on:
 //   - externalIds(type, platformId) -> { device, feature(key) }
+//   - scanNetwork(type, options)     -> returns the injected raw scan replies
 //   - publishState / publishStates   -> recorded for assertions
 //   - publishDiscoveredDevices        -> recorded for assertions
 //   - getDevices                      -> returns the injected devices
 //   - setConnectionStatus             -> recorded for assertions
 // -----------------------------------------------------------------------------
 
-export function createFakeGladys({ devices = [] } = {}) {
+export function createFakeGladys({ devices = [], scanReplies = [] } = {}) {
   const published = [];
   const discovered = [];
   const connectionStatuses = [];
+  const scanCalls = [];
 
   return {
     devices,
     published,
     discovered,
     connectionStatuses,
+    scanCalls,
+
+    async scanNetwork(type, options) {
+      scanCalls.push({ type, options });
+      return scanReplies;
+    },
 
     externalIds(type, platformId) {
       const device = `ext:test:${type}:${platformId}`;

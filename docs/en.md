@@ -18,40 +18,35 @@ they are not published because they have no controllable feature yet.
 > protocol. Newer Kasa firmware that only exposes the encrypted KLAP protocol is
 > not supported.
 
-## Why you must enter IP addresses
+## How discovery works
 
-The integration runs in a **sandboxed container**. From there it can reach a
-device by **unicast** (a known IP address), but it cannot receive the UDP
-broadcast responses that classic Kasa auto-discovery relies on. So the only
-discovery path is the **configured IP list**.
+Kasa devices only answer an **active discovery probe**, and the integration runs
+in a sandboxed container that cannot broadcast onto your LAN. So the scan is
+**mediated by Gladys**: the integration forges the encrypted Kasa discovery
+request, the Gladys core (which sits on your home network) broadcasts it, and
+relays the devices' replies back. You do not enter any IP address — the scan
+finds your devices, and the IP each one answered from is remembered to control
+it afterwards.
 
 Give your Kasa devices a **DHCP reservation** on your router so their IP address
-stays stable.
+stays stable; if it changes, a new scan picks up the new address automatically.
 
 ## Configuration
 
 1. Open the **Configuration** tab of the integration.
-2. In **Device IP addresses**, enter your devices' IPs, separated by commas or
-   spaces (for example `192.168.1.20, 192.168.1.21`).
-3. Choose a **Refresh interval** — how often each device is polled to refresh
-   its state (default: every minute).
-4. Save.
-5. Open the **Discovery** tab and click **scan**: each configured IP is probed
-   and reachable devices appear.
-6. Click **create** on the ones you want. They land in the **Devices** tab with
+2. Choose a **Refresh interval** — how often each device is polled to refresh
+   its state (default: every minute). Save.
+3. Open the **Discovery** tab and click **scan**: your Kasa devices appear.
+4. Click **create** on the ones you want. They land in the **Devices** tab with
    an On/Off control.
 
-## Actions
-
-- **Test a device by IP** — enter an IP address and the integration performs a
-  live unicast probe, confirming the device is reachable from the container
-  before you add its IP to the configuration.
+Run a scan again anytime you add a new device.
 
 ## Troubleshooting
 
-- **A device does not appear on scan.** Confirm its IP with the **Test a device
-  by IP** action. If the test fails, the container cannot reach that IP — check
-  the address, the DHCP reservation, and that the device is on the same network.
+- **A device does not appear on scan.** Make sure it is powered on and on the
+  same network/subnet as your Gladys host, then scan again. Only classic-protocol
+  Kasa devices answer (see below).
 - **A device appears but never changes state.** Its firmware may only speak the
   newer KLAP protocol, which is not supported.
 - **Need more detail?** The integration logs everything it does. Check the

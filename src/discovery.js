@@ -2,47 +2,52 @@
 // Device discovery — the external-integration counterpart of the core
 // `smart-device.getDevices.js`.
 //
-// The configured IP list is probed by unicast (the only reliable path from a
-// bridge container) and de-duplicated by the device serial (deviceId). The
-// result is the list of discovery payloads to hand to
-// `gladys.publishDiscoveredDevices()`. Nothing is created here: the user picks
-// which discovered devices to add, from the Gladys "Discovery" tab.
+// Kasa devices only answer an *active* discovery probe (query/response), and a
+// bridge container can neither broadcast onto the LAN nor receive the unicast
+// replies. So we use the SDK's mediated `udp-active-broadcast` scan: we forge
+// the encrypted request, the core (host network) broadcasts it and relays the
+// raw unicast replies, and we decode them here. Each reply carries the device's
+// source IP, which rides along as a param so later commands/polls reach it by
+// unicast. Nothing is created here: the user picks which discovered devices to
+// add, from the Gladys "Discovery" tab.
 // -----------------------------------------------------------------------------
 
 import { createLogger } from '@gladysassistant/integration-sdk';
 import { buildDevice } from './tplink/model.js';
+import { buildDiscoveryRequest, parseDiscoveryReply, DISCOVERY_PORT } from './tplink/protocol.js';
 import { DEVICE_KINDS } from './constants.js';
-import { mapLimit } from './utils.js';
 
 const logger = createLogger({ name: 'tp-link-discovery' });
 
-const PROBE_CONCURRENCY = 5;
+// Scan duration handed to the core (SDK bound: 1-30s). Kasa devices answer in a
+// few hundred ms; 5s comfortably covers a LAN without dragging the UI.
+const SCAN_TIMEOUT_SECONDS = 5;
 
 /**
  * Scan for TP-Link devices and build their discovery payloads.
  * @param {object} gladys - The GladysIntegration SDK instance.
- * @param {object} tpClient - The TP-Link client wrapper (see tplink/client.js).
  * @param {object} config - The normalized integration configuration.
  * @returns {Promise<Array>} The discovery payloads for the supported devices.
  * @example
- * await scan(gladys, tpClient, config);
+ * await scan(gladys, config);
  */
-export async function scan(gladys, tpClient, config) {
-  // deviceId -> { sysInfo, host }
-  const responders = new Map();
+export async function scan(gladys, config) {
+  const replies = await gladys.scanNetwork('udp-active-broadcast', {
+    port: DISCOVERY_PORT,
+    payload: buildDiscoveryRequest(),
+    timeoutSeconds: SCAN_TIMEOUT_SECONDS,
+  });
 
-  // Unicast probe of every configured IP.
-  if (config.ips.length > 0) {
-    await mapLimit(config.ips, PROBE_CONCURRENCY, async (host) => {
-      try {
-        const sysInfo = await tpClient.getSysInfo(host);
-        if (sysInfo && sysInfo.deviceId) {
-          responders.set(sysInfo.deviceId, { sysInfo, host });
-        }
-      } catch (err) {
-        logger.warn(`Could not reach TP-Link device at ${host}: ${err.message}`);
-      }
-    });
+  // deviceId -> { sysInfo, host }, de-duplicated by serial (a device may answer
+  // more than one datagram).
+  const responders = new Map();
+  for (const { source_ip: host, payload_base64: payloadBase64 } of replies) {
+    const sysInfo = parseDiscoveryReply(payloadBase64);
+    if (!sysInfo) {
+      logger.warn(`Ignoring an unreadable discovery reply from ${host}`);
+      continue;
+    }
+    responders.set(sysInfo.deviceId, { sysInfo, host });
   }
 
   // Build the payloads, skipping the unsupported device types.

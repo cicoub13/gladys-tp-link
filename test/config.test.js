@@ -1,33 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeConfig, parseIpList, DEFAULT_CONFIG } from '../src/config.js';
-
-test('parseIpList splits on commas, spaces, semicolons and newlines', () => {
-  assert.deepEqual(parseIpList('192.168.1.10, 192.168.1.11'), ['192.168.1.10', '192.168.1.11']);
-  assert.deepEqual(parseIpList('192.168.1.10 192.168.1.11'), ['192.168.1.10', '192.168.1.11']);
-  assert.deepEqual(parseIpList('192.168.1.10;192.168.1.11\n192.168.1.12'), [
-    '192.168.1.10',
-    '192.168.1.11',
-    '192.168.1.12',
-  ]);
-});
-
-test('parseIpList trims, drops empties and de-duplicates', () => {
-  assert.deepEqual(parseIpList('  192.168.1.10 ,, 192.168.1.10 '), ['192.168.1.10']);
-  assert.deepEqual(parseIpList(''), []);
-  assert.deepEqual(parseIpList(undefined), []);
-});
+import { normalizeConfig, DEFAULT_CONFIG } from '../src/config.js';
 
 test('normalizeConfig applies the defaults', () => {
   const config = normalizeConfig();
   assert.equal(config.poll_frequency, DEFAULT_CONFIG.poll_frequency);
-  assert.deepEqual(config.ips, []);
 });
 
-test('normalizeConfig coerces numbers coming as strings and derives ips', () => {
-  const config = normalizeConfig({ poll_frequency: '30', device_ips: '10.0.0.1, 10.0.0.2' });
+test('normalizeConfig coerces a poll_frequency coming as a string', () => {
+  const config = normalizeConfig({ poll_frequency: '30' });
   assert.equal(config.poll_frequency, 30);
-  assert.deepEqual(config.ips, ['10.0.0.1', '10.0.0.2']);
 });
 
 test('normalizeConfig snaps poll_frequency to the closed set Gladys core accepts', () => {

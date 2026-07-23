@@ -3,7 +3,26 @@
 //
 //   - getSysInfo(host)       -> returns the sysinfo mapped to that host, or throws
 //   - setPowerState(host,on) -> records the command
+//
+// Also provides discoveryReply(): a real encrypted `udp-active-broadcast` scan
+// result for a sysinfo, so discovery tests exercise the actual codec.
 // -----------------------------------------------------------------------------
+
+import { encrypt } from 'tplink-smarthome-crypto';
+
+/**
+ * Build a raw scan reply the way the core relays it, with a genuinely encrypted
+ * Kasa payload — so parseDiscoveryReply() is exercised for real.
+ * @param {string} sourceIp - The device IP the reply comes from.
+ * @param {object} sysInfo - The TP-Link `sysinfo` to encode.
+ * @returns {{ source_ip: string, source_port: number, payload_base64: string }}
+ * @example
+ * discoveryReply('192.168.1.10', PLUG_SYSINFO);
+ */
+export function discoveryReply(sourceIp, sysInfo) {
+  const payload = encrypt(JSON.stringify({ system: { get_sysinfo: sysInfo } }));
+  return { source_ip: sourceIp, source_port: 9999, payload_base64: payload.toString('base64') };
+}
 
 export function createFakeTpLink({ byHost = {} } = {}) {
   const powerCommands = [];

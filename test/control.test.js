@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { DEVICE_FEATURE_CATEGORIES } from '@gladysassistant/integration-sdk';
 import { handleSetValue } from '../src/setValue.js';
 import { handlePoll, readOnOff } from '../src/poll.js';
-import { testDevice } from '../src/actions.js';
 import { buildDevice } from '../src/tplink/model.js';
 import { DEVICE_KINDS } from '../src/constants.js';
 import { normalizeConfig } from '../src/config.js';
@@ -94,25 +93,4 @@ test('handlePoll publishes the bulb light_state.on_off', async () => {
 
   assert.equal(gladys.published[0].featureExternalId, device.features[0].external_id);
   assert.equal(gladys.published[0].state, 1);
-});
-
-// --- actions ----------------------------------------------------------------
-
-test('testDevice reports a reachable, supported device', async () => {
-  const tpClient = createFakeTpLink({ byHost: { '192.168.1.10': PLUG_SYSINFO } });
-  const message = await testDevice(tpClient, { ip: '192.168.1.10' });
-  assert.match(message.en, /Office plug/);
-  assert.match(message.en, new RegExp(DEVICE_KINDS.PLUG));
-});
-
-test('testDevice reports an unreachable device', async () => {
-  const tpClient = createFakeTpLink({ byHost: {} });
-  const message = await testDevice(tpClient, { ip: '192.168.1.99' });
-  assert.match(message.en, /Could not reach/);
-});
-
-test('testDevice guards an empty IP', async () => {
-  const tpClient = createFakeTpLink({ byHost: {} });
-  const message = await testDevice(tpClient, {});
-  assert.match(message.en, /provide an IP/);
 });

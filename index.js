@@ -19,7 +19,6 @@ import { createClient } from './src/tplink/client.js';
 import { scan } from './src/discovery.js';
 import { handleSetValue } from './src/setValue.js';
 import { handlePoll } from './src/poll.js';
-import { testDevice } from './src/actions.js';
 
 const gladys = new GladysIntegration();
 const tpClient = createClient();
@@ -33,7 +32,7 @@ let config = normalizeConfig();
 // is wrapped explicitly to keep failures (e.g. a rejected payload) visible.
 gladys.onScanRequest(async () => {
   logger.info('onScanRequest -> scanning for TP-Link devices');
-  const devices = await scan(gladys, tpClient, config);
+  const devices = await scan(gladys, config);
   try {
     await gladys.publishDiscoveredDevices(devices);
   } catch (err) {
@@ -50,9 +49,6 @@ gladys.onSetValue(async (device, feature, value) => {
 gladys.onPoll(async (device) => {
   await handlePoll(gladys, tpClient, device);
 });
-
-// --- Manifest action: "Test a device by IP" ----------------------------------
-gladys.onAction('test_device', (fields) => testDevice(tpClient, fields));
 
 // --- Configuration updated by the user ---------------------------------------
 gladys.onConfigUpdated(async (newConfig) => {

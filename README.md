@@ -28,23 +28,28 @@ published (no controllable feature). This matches what the core service handles.
 
 ## How discovery works (important)
 
-The integration runs in a **sandboxed bridge-network container**. From there it
-can reach a device by **unicast** (a known IP address), but it cannot receive the
-UDP broadcast responses that classic Kasa auto-discovery relies on — and Gladys'
-mediated `udp-broadcast` network discovery only _passively listens_, it never
-sends the active probe Kasa devices require to answer. So the only discovery
-path is the **configured IP list**: enter your devices' IP addresses in the
-integration configuration (`Device IP addresses`); on a scan, each IP is probed
-by unicast and the device is published to the **Discovery** tab. Give your Kasa
-devices a DHCP reservation so their IP is stable.
+The integration runs in a **sandboxed bridge-network container**: it cannot
+broadcast onto the LAN, and Kasa devices only answer an _active_ discovery probe
+(query/response). So discovery is **mediated by the Gladys core** through the SDK
+`udp-active-broadcast` scan: the integration forges the encrypted Kasa discovery
+request, the core — which sits on the host network — broadcasts it on UDP port
+9999 and relays the raw unicast replies, and the integration decodes them. **No
+IP address to configure**: on a scan the answering devices are published to the
+**Discovery** tab, and the source IP each one replied from rides along as a
+device param so later commands/polls reach it by unicast.
 
-Use the **Test a device by IP** action button in the Configuration screen to
-confirm a device is reachable from the container before adding its IP.
+Give your Kasa devices a DHCP reservation so their IP is stable; if it changes, a
+new scan picks up the new address (Gladys upserts the stored IP silently).
+
+The scan is declared in the manifest `network_discovery` field
+(`{ "type": "udp-active-broadcast", "ports": [9999] }`) — the core rejects any
+capture the manifest does not declare.
 
 ## Usage in Gladys
 
 1. Install the integration (developer mode or from the catalog).
-2. Open its **Configuration** tab, fill in `Device IP addresses`, save.
+2. Open its **Configuration** tab, pick a refresh interval, save (optional — a
+   default is applied).
 3. Open its **Discovery** tab and click **scan** — your devices appear.
 4. Click **create** on the ones you want. They land in the **Devices** tab with
    an On/Off control, and are polled every `poll_frequency` seconds.
@@ -53,7 +58,6 @@ confirm a device is reachable from the container before adding its IP.
 
 | Key              | Type   | Default | Description                                                                                                                                                                         |
 | ---------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `device_ips`     | string | `''`    | Comma / space separated list of device IP addresses.                                                                                                                                |
 | `poll_frequency` | select | `60`    | How often each device is polled, in seconds. One of `1`, `2`, `10`, `15`, `30`, `60` — the only values Gladys core accepts on a published device (in milliseconds, under the hood). |
 
 ## Project structure
@@ -62,16 +66,15 @@ confirm a device is reachable from the container before adding its IP.
 .
 ├─ index.js                          # SDK bootstrap + event wiring (no device logic)
 ├─ src/
-│  ├─ config.js                      # config defaults, normalization, IP parsing
+│  ├─ config.js                      # config defaults + poll-frequency snapping
 │  ├─ constants.js                   # external-id kinds, feature keys, param names
-│  ├─ utils.js                       # mapLimit (bounded-concurrency probing)
-│  ├─ discovery.js                   # scan: IP probe -> discovery payloads
+│  ├─ discovery.js                   # scan: udp-active-broadcast -> discovery payloads
 │  ├─ deviceLookup.js                # resolve a device's IP and ON/OFF feature
 │  ├─ setValue.js                    # onSetValue: ON/OFF command
 │  ├─ poll.js                        # onPoll: refresh state
-│  ├─ actions.js                     # "Test a device by IP" manifest action
 │  └─ tplink/
-│     ├─ client.js                   # thin wrapper around tplink-smarthome-api
+│     ├─ client.js                   # thin wrapper around tplink-smarthome-api (unicast)
+│     ├─ protocol.js                 # Kasa discovery codec (forge request / decode reply)
 │     └─ model.js                    # sysinfo -> Gladys discovery payload
 ├─ gladys-assistant-integration.json # manifest (name, config schema, image…)
 ├─ Dockerfile                        # Node 24 Alpine, read-only rootfs ready
