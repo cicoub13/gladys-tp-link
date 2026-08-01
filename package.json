@@ -1,6 +1,6 @@
 {
   "name": "gladys-tp-link",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Control your TP-Link Kasa smart plugs, switches and bulbs from Gladys Assistant (external integration).",
   "type": "module",
