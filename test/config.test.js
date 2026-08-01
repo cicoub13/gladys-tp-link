@@ -12,6 +12,25 @@ test('normalizeConfig coerces a poll_frequency coming as a string', () => {
   assert.equal(config.poll_frequency, 30);
 });
 
+test('normalizeConfig falls back to the default on any unusable value', () => {
+  // A non-numeric value must NOT reach the snapping reduce: every comparison
+  // against NaN is false, so it would settle on the first candidate — 1 second,
+  // the chattiest frequency of the set (60x the intended network, history and
+  // trigger load), the exact opposite of a safe default.
+  for (const value of ['', 'abc', 0, -5, NaN, {}, true, [], null, undefined]) {
+    assert.equal(
+      normalizeConfig({ poll_frequency: value }).poll_frequency,
+      DEFAULT_CONFIG.poll_frequency,
+      `poll_frequency: ${JSON.stringify(value)}`,
+    );
+  }
+});
+
+test('normalizeConfig tolerates a null configuration', () => {
+  // getConfig() can hand back null; the `= {}` default would not cover it.
+  assert.equal(normalizeConfig(null).poll_frequency, DEFAULT_CONFIG.poll_frequency);
+});
+
 test('normalizeConfig snaps poll_frequency to the closed set Gladys core accepts', () => {
   // Gladys core rejects (silently, on publishDiscoveredDevices) any
   // poll_frequency outside [1, 2, 10, 15, 30, 60] seconds — a stale value

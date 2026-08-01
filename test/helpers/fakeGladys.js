@@ -3,18 +3,20 @@
 //
 // Reproduces only the surface the integration relies on:
 //   - externalIds(type, platformId) -> { device, feature(key) }
-//   - scanNetwork(type, options)     -> returns the injected raw scan replies
+//   - scanNetwork(type, options)     -> injected raw scan replies, or throws
 //   - publishState / publishStates   -> recorded for assertions
-//   - publishDiscoveredDevices        -> recorded for assertions
+//   - publishDiscoveredDevices        -> recorded, or throws
+//   - publishTransports               -> recorded for assertions
 //   - getDevices                      -> returns the injected devices
 //   - setConnectionStatus             -> recorded for assertions
 // -----------------------------------------------------------------------------
 
-export function createFakeGladys({ devices = [], scanReplies = [] } = {}) {
+export function createFakeGladys({ devices = [], scanReplies = [], scanError, publishError } = {}) {
   const published = [];
   const discovered = [];
   const connectionStatuses = [];
   const scanCalls = [];
+  const transports = [];
 
   return {
     devices,
@@ -22,10 +24,19 @@ export function createFakeGladys({ devices = [], scanReplies = [] } = {}) {
     discovered,
     connectionStatuses,
     scanCalls,
+    transports,
 
     async scanNetwork(type, options) {
       scanCalls.push({ type, options });
+      if (scanError) {
+        throw scanError;
+      }
       return scanReplies;
+    },
+
+    async publishTransports(entries) {
+      transports.push(...entries);
+      return { success: true };
     },
 
     externalIds(type, platformId) {
@@ -49,6 +60,9 @@ export function createFakeGladys({ devices = [], scanReplies = [] } = {}) {
     },
 
     async publishDiscoveredDevices(list) {
+      if (publishError) {
+        throw publishError;
+      }
       discovered.push(...list);
       return { success: true, count: list.length };
     },

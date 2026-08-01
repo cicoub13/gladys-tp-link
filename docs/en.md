@@ -14,6 +14,11 @@ devices using the classic Kasa LAN protocol.
 Other TP-Link types are detected during a scan and reported in the logs, but
 they are not published because they have no controllable feature yet.
 
+> **Multi-outlet strips are not supported.** Kasa power strips (HS300, HS107,
+> KP303, KP400) are detected and deliberately skipped: their outlets are
+> controlled individually, which this integration cannot do yet. Publishing them
+> would offer a single switch that turns the whole strip off at once.
+
 > **Local-only, legacy protocol.** This integration speaks the classic Kasa LAN
 > protocol. Newer Kasa firmware that only exposes the encrypted KLAP protocol is
 > not supported.
@@ -36,6 +41,11 @@ stays stable; if it changes, a new scan picks up the new address automatically.
 1. Open the **Configuration** tab of the integration.
 2. Choose a **Refresh interval** — how often each device is polled to refresh
    its state (default: every minute). Save.
+
+   > This interval is stored on each device when it is discovered. Changing it
+   > later does **not** update the devices you already created: run a new scan
+   > to apply the new value.
+
 3. Open the **Discovery** tab and click **scan**: your Kasa devices appear.
 4. Click **create** on the ones you want. They land in the **Devices** tab with
    an On/Off control.
@@ -49,6 +59,16 @@ Run a scan again anytime you add a new device.
   Kasa devices answer (see below).
 - **A device appears but never changes state.** Its firmware may only speak the
   newer KLAP protocol, which is not supported.
+- **"Nothing happens" when I click scan.** Gladys allows one scan every 10
+  seconds: wait a moment before scanning again. The error is shown in the
+  integration banner.
+- **A device is flagged "unreachable".** It is off, unplugged, or its IP address
+  changed. Check it is powered on, then run a new scan to pick up its new
+  address.
+- **"Another device now answers at this address".** Your router reassigned that
+  device's IP address to something else. Run a new scan: the integration
+  deliberately refuses to control a device whose identity it could not verify,
+  rather than acting on the wrong one.
 - **Need more detail?** The integration logs everything it does. Check the
   integration logs from the Gladys UI (or `docker logs` on the host) with
   `LOG_LEVEL=debug` for the full detail.
