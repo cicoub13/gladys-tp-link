@@ -5,10 +5,13 @@
 # keep:
 #   1. Prettier  -> consistent formatting (no style debates in reviews);
 #   2. ESLint    -> catch real mistakes (undefined vars, dead code, ...);
-#   3. Tests     -> `node --test`, the built-in runner (no extra dependency).
+#   3. Tests     -> `node --test`, the built-in runner (no extra dependency),
+#                   with coverage thresholds so a regression cannot slip in;
+#   4. npm audit -> production dependencies only.
 #
-# Runs on Node 24, the version the Docker image ships with (see the Dockerfile),
-# so the check exercises the exact runtime the integration runs on.
+# Runs across the whole range `engines` declares (Node 20 to 24) — the image
+# ships Node 24, but a contributor on the declared minimum must not discover a
+# breakage the CI never exercised.
 # -----------------------------------------------------------------------------
 name: CI
 
@@ -18,10 +21,18 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
-    name: Lint & test
+    timeout-minutes: 10
+    name: Lint & test (Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,7 +40,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install dependencies
@@ -43,3 +54,12 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      # The coverage threshold flags only exist from Node 22.8, so the gate runs
+      # on the version the image actually ships (see the Dockerfile).
+      - name: Enforce coverage thresholds
+        if: matrix.node == 24
+        run: npm run coverage
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

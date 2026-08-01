@@ -2,36 +2,23 @@
 // Refresh a device state on Gladys' schedule — port of the core
 // `smart-device.poll.js`.
 //
-// Read the current sysinfo by unicast, extract the ON/OFF state depending on
-// the device kind (plug -> relay_state, bulb -> light_state.on_off) and publish
-// it. The SDK stores the last value, so publishing an unchanged value is cheap
-// and keeps the history/last-seen accurate.
+// Read the current sysinfo by unicast, check the address is still held by the
+// device we expect, extract the ON/OFF state depending on the device kind (plug
+// -> relay_state, bulb -> light_state.on_off) and publish it if it changed.
+//
+// Publishing an unchanged value is NOT free: Gladys writes a history row,
+// broadcasts a websocket event and re-evaluates every trigger on each state it
+// receives — hence the deduplication in src/statePublisher.js.
 // -----------------------------------------------------------------------------
 
 import { createLogger } from '@gladysassistant/integration-sdk';
-import { resolveDevice, resolveHost, findOnOffFeature } from './deviceLookup.js';
-import { classify } from './tplink/model.js';
-import { DEVICE_KINDS } from './constants.js';
+import { resolveTarget, findOnOffFeature } from './deviceLookup.js';
+import { classify, readOnOff, assertExpectedDevice } from './tplink/model.js';
+import { publishFeatureState, publishDeviceTransport } from './statePublisher.js';
+import { TRANSPORTS } from './constants.js';
+import { toUserFacingError } from './errors.js';
 
 const logger = createLogger({ name: 'tp-link-poll' });
-
-/**
- * Read the ON/OFF state out of a sysinfo, given the device kind.
- * @param {string} kind - One of DEVICE_KINDS.
- * @param {object} sysInfo - The TP-Link `sysinfo` object.
- * @returns {number|undefined} 1 / 0, or undefined for an unsupported kind.
- * @example
- * readOnOff(DEVICE_KINDS.PLUG, { relay_state: 1 }); // 1
- */
-export function readOnOff(kind, sysInfo) {
-  if (kind === DEVICE_KINDS.PLUG) {
-    return sysInfo.relay_state;
-  }
-  if (kind === DEVICE_KINDS.BULB) {
-    return sysInfo.light_state && sysInfo.light_state.on_off;
-  }
-  return undefined;
-}
 
 /**
  * Poll a device and publish its current ON/OFF state.
@@ -39,20 +26,12 @@ export function readOnOff(kind, sysInfo) {
  * @param {object} tpClient - The TP-Link client wrapper.
  * @param {object} device - The device to poll.
  * @returns {Promise<void>} Resolves once the state has been published.
+ * @throws {Error} When the device cannot be read, so the SDK acks the failure.
  * @example
  * await handlePoll(gladys, tpClient, device);
  */
 export async function handlePoll(gladys, tpClient, device) {
-  const full = await resolveDevice(gladys, device);
-  const host = await resolveHost(gladys, full);
-
-  const sysInfo = await tpClient.getSysInfo(host);
-  const kind = classify(sysInfo);
-  const state = readOnOff(kind, sysInfo);
-  if (state === undefined) {
-    logger.warn(`Poll: device ${device.external_id} is not a managed TP-Link type`);
-    return;
-  }
+  const { full, host, serial } = await resolveTarget(gladys, device);
 
   const feature = findOnOffFeature(full);
   if (!feature) {
@@ -60,6 +39,29 @@ export async function handlePoll(gladys, tpClient, device) {
     return;
   }
 
+  // Taken before the read so a poll that started before a user command cannot
+  // publish the pre-command state after it (see src/statePublisher.js).
+  const readAt = Date.now();
+  let sysInfo;
+  try {
+    sysInfo = await tpClient.getSysInfo(host);
+    assertExpectedDevice(sysInfo, serial, host);
+  } catch (err) {
+    logger.error(`Poll of ${device.external_id} failed at ${host}`, err);
+    await publishDeviceTransport(gladys, full.external_id, TRANSPORTS.UNREACHABLE).catch((reportErr) => {
+      logger.error('Could not publish the unreachable transport', reportErr);
+    });
+    throw toUserFacingError(err, `TP-Link device unreachable at ${host}: check it is powered on and on your network`);
+  }
+
+  await publishDeviceTransport(gladys, full.external_id, TRANSPORTS.LOCAL);
+
+  const state = readOnOff(classify(sysInfo), sysInfo);
+  if (typeof state !== 'number') {
+    logger.warn(`Poll: no readable ON/OFF state for ${device.external_id} (model ${sysInfo.model})`);
+    return;
+  }
+
   logger.debug(`Poll ${device.external_id} -> ${state} (${host})`);
-  await gladys.publishState(feature.external_id, state);
+  await publishFeatureState(gladys, feature.external_id, state, readAt);
 }

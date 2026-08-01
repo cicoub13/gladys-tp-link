@@ -15,9 +15,11 @@ RUN apk add --no-cache dumb-init
 
 WORKDIR /app
 
-# Install the PROD dependencies first (better build cache).
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install --omit=dev
+# Install the PROD dependencies first (better build cache). No `|| npm install`
+# fallback: it would silently resolve fresh versions when the lockfile is out of
+# sync, and ship an image built from something other than what CI tested.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 # Then the integration code.
 COPY index.js ./

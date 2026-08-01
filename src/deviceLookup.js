@@ -43,21 +43,25 @@ export async function resolveDevice(gladys, device) {
 }
 
 /**
- * Resolve the IP address of a device.
+ * Resolve everything a command needs about a device, in a single lookup: the
+ * full device, the address to reach it at, and the serial that address must
+ * still be held by.
  * @param {object} gladys - The GladysIntegration SDK instance.
- * @param {object} device - The device from an event.
- * @returns {Promise<string>} The device IP address.
+ * @param {object} device - The (possibly lightweight) device from an event.
+ * @returns {Promise<{ full: object, host: string, serial: (string|undefined) }>}
  * @throws {Error} When the device carries no IP address param.
  * @example
- * const host = await resolveHost(gladys, device);
+ * const { full, host, serial } = await resolveTarget(gladys, device);
  */
-export async function resolveHost(gladys, device) {
+export async function resolveTarget(gladys, device) {
   const full = await resolveDevice(gladys, device);
   const host = getParam(full, PARAMS.IP_ADDRESS);
   if (!host) {
-    throw new Error(`No IP address stored for device ${device.external_id}`);
+    const err = new Error('No address stored for this device: run a new scan to find it again');
+    err.userFacing = true;
+    throw err;
   }
-  return host;
+  return { full, host, serial: getParam(full, PARAMS.SERIAL_NUMBER) };
 }
 
 /**

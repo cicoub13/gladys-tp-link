@@ -16,7 +16,7 @@
 import { GladysIntegration, logger } from '@gladysassistant/integration-sdk';
 import { normalizeConfig } from './src/config.js';
 import { createClient } from './src/tplink/client.js';
-import { scan } from './src/discovery.js';
+import { handleScanRequest } from './src/discovery.js';
 import { handleSetValue } from './src/setValue.js';
 import { handlePoll } from './src/poll.js';
 
@@ -27,17 +27,12 @@ const tpClient = createClient();
 let config = normalizeConfig();
 
 // --- Discovery: the user clicked "scan" in the Discovery tab -----------------
-// onScanRequest is an unacked SDK event: a thrown error here is otherwise
-// swallowed silently (no ack, no console output), so publishDiscoveredDevices
-// is wrapped explicitly to keep failures (e.g. a rejected payload) visible.
+// onScanRequest is an unacked SDK event: an error thrown from here is swallowed
+// into the SDK debug channel (no ack, no visible log), so handleScanRequest owns
+// the reporting and never throws — see src/discovery.js.
 gladys.onScanRequest(async () => {
   logger.info('onScanRequest -> scanning for TP-Link devices');
-  const devices = await scan(gladys, config);
-  try {
-    await gladys.publishDiscoveredDevices(devices);
-  } catch (err) {
-    logger.error(`publishDiscoveredDevices failed: ${err.message}`);
-  }
+  await handleScanRequest(gladys, config);
 });
 
 // --- Command: the user acted on a controllable feature -----------------------
@@ -51,9 +46,15 @@ gladys.onPoll(async (device) => {
 });
 
 // --- Configuration updated by the user ---------------------------------------
+// Wrapped because onConfigUpdated is unacked too: an error here would leave the
+// integration silently running on the previous configuration.
 gladys.onConfigUpdated(async (newConfig) => {
   logger.info('onConfigUpdated -> new configuration received');
-  config = normalizeConfig(newConfig);
+  try {
+    config = normalizeConfig(newConfig);
+  } catch (err) {
+    logger.error('Could not apply the new configuration, keeping the previous one', err);
+  }
 });
 
 // --- Connection lifecycle ----------------------------------------------------

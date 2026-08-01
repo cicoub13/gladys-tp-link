@@ -22,6 +22,12 @@ Under the hood it uses the same driver as the core service,
 Other TP-Link types are detected during a scan and reported in the logs, but not
 published (no controllable feature). This matches what the core service handles.
 
+Multi-outlet strips (HS300, HS107, KP303, KP400) announce themselves as
+`IOT.SMARTPLUGSWITCH` but carry their state in `sysinfo.children[]`, and a
+command without a `childId` switches every outlet at once. They are detected and
+skipped with an explicit log line rather than published as a plug that cannot
+work — see `classify()` in `src/tplink/model.js`.
+
 > **Local-only, legacy protocol.** Like the core service, this integration speaks
 > the classic Kasa LAN protocol. Newer Kasa firmware that only exposes the
 > encrypted KLAP protocol is not supported by `tplink-smarthome-api`.
@@ -54,6 +60,9 @@ capture the manifest does not declare.
 4. Click **create** on the ones you want. They land in the **Devices** tab with
    an On/Off control, and are polled every `poll_frequency` seconds.
 
+The refresh interval is written onto each device at discovery time, so changing
+it only affects devices created by a **later** scan.
+
 ## Configuration
 
 | Key              | Type   | Default | Description                                                                                                                                                                         |
@@ -68,14 +77,16 @@ capture the manifest does not declare.
 ├─ src/
 │  ├─ config.js                      # config defaults + poll-frequency snapping
 │  ├─ constants.js                   # external-id kinds, feature keys, param names
-│  ├─ discovery.js                   # scan: udp-active-broadcast -> discovery payloads
-│  ├─ deviceLookup.js                # resolve a device's IP and ON/OFF feature
+│  ├─ discovery.js                   # scan + the reporting wrapper for onScanRequest
+│  ├─ deviceLookup.js                # resolve a device's address, serial and feature
+│  ├─ errors.js                      # driver errors -> readable user messages
+│  ├─ statePublisher.js              # publish to Gladys only what actually changed
 │  ├─ setValue.js                    # onSetValue: ON/OFF command
 │  ├─ poll.js                        # onPoll: refresh state
 │  └─ tplink/
 │     ├─ client.js                   # thin wrapper around tplink-smarthome-api (unicast)
 │     ├─ protocol.js                 # Kasa discovery codec (forge request / decode reply)
-│     └─ model.js                    # sysinfo -> Gladys discovery payload
+│     └─ model.js                    # sysinfo -> kind, ON/OFF state, discovery payload
 ├─ gladys-assistant-integration.json # manifest (name, config schema, image…)
 ├─ Dockerfile                        # Node 24 Alpine, read-only rootfs ready
 ├─ .github/workflows/                # CI + multi-arch build + UI-driven release
@@ -101,6 +112,7 @@ npm start
 npm run format:check   # Prettier
 npm run lint           # ESLint
 npm test               # unit tests (node --test)
+npm run coverage       # tests + coverage thresholds (needs Node >= 22.8)
 ```
 
 Validate the manifest/image/cover the way the store does, before tagging:
@@ -112,15 +124,13 @@ npx github:GladysAssistant/integration-store .
 ## Publish
 
 1. Push this repo to GitHub and add the topic `gladys-assistant-integration`.
-2. Replace `your-github-username` in `docker_image` and `cover_image`
-   (`gladys-assistant-integration.json`) with your GitHub namespace.
-3. **Actions → Release → Run workflow** (`patch` / `minor` / `major`): it bumps
+2. **Actions → Release → Run workflow** (`patch` / `minor` / `major`): it bumps
    the version everywhere, tags `vX.Y.Z`, and publishes the multi-arch image
    (`linux/amd64` + `linux/arm64`) to `ghcr.io`. The decentralized indexer then
    offers a one-click install/update in Gladys.
 
-> Replace `cover.png` with your own 800×534 px image (≤150 KB) before publishing;
-> the bundled one is the template's gradient placeholder.
+> `cover.png` is still the template's gradient placeholder (800×534 px, ≤150 KB).
+> Replace it with a real cover before the integration reaches the catalog.
 
 ## License
 

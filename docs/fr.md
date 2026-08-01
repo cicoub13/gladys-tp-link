@@ -14,6 +14,12 @@ et communique avec vos appareils via le protocole LAN Kasa classique.
 Les autres types TP-Link sont détectés lors d'un scan et signalés dans les logs,
 mais ne sont pas publiés car ils n'ont pas encore de fonctionnalité contrôlable.
 
+> **Multiprises non prises en charge.** Les barrettes Kasa à plusieurs prises
+> (HS300, HS107, KP303, KP400) sont détectées et volontairement ignorées : leurs
+> prises se pilotent individuellement, ce que cette intégration ne sait pas
+> encore faire. Les publier reviendrait à proposer un seul interrupteur qui
+> éteindrait toute la barrette d'un coup.
+
 > **Local uniquement, protocole historique.** Cette intégration utilise le
 > protocole LAN Kasa classique. Les firmwares Kasa récents qui n'exposent que le
 > protocole chiffré KLAP ne sont pas pris en charge.
@@ -38,6 +44,11 @@ automatiquement la nouvelle adresse.
 2. Choisissez un **Intervalle de rafraîchissement** — la fréquence
    d'interrogation de chaque appareil pour rafraîchir son état (par défaut :
    toutes les minutes). Enregistrez.
+
+   > Cet intervalle est enregistré sur chaque appareil au moment où il est
+   > découvert. Le modifier plus tard ne change **pas** les appareils déjà
+   > créés : relancez un scan pour appliquer la nouvelle valeur.
+
 3. Ouvrez l'onglet **Découverte** et cliquez sur **scanner** : vos appareils
    Kasa apparaissent.
 4. Cliquez sur **créer** pour ceux que vous souhaitez ajouter. Ils apparaissent
@@ -52,6 +63,16 @@ Relancez un scan à tout moment lorsque vous ajoutez un nouvel appareil.
   appareils Kasa au protocole classique répondent (voir ci-dessous).
 - **Un appareil apparaît mais ne change jamais d'état.** Son firmware ne parle
   peut-être que le protocole KLAP récent, non pris en charge.
+- **« Rien ne se passe » quand je clique sur scanner.** Gladys n'autorise qu'un
+  scan toutes les 10 secondes : patientez un instant avant de relancer. Le
+  message d'erreur s'affiche dans le bandeau de l'intégration.
+- **Un appareil est marqué « injoignable ».** Il est éteint, débranché, ou son
+  adresse IP a changé. Vérifiez qu'il est alimenté, puis relancez un scan pour
+  récupérer sa nouvelle adresse.
+- **« Un autre appareil répond à cette adresse ».** Votre box a réattribué
+  l'adresse IP de cet appareil à un autre. Relancez un scan : l'intégration
+  refuse volontairement de piloter un appareil dont elle n'a pas pu vérifier
+  l'identité, plutôt que d'agir sur le mauvais.
 - **Besoin de plus de détails ?** L'intégration journalise tout ce qu'elle fait.
   Consultez les logs de l'intégration depuis l'interface Gladys (ou `docker logs`
   sur l'hôte) avec `LOG_LEVEL=debug` pour le détail complet.

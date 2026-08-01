@@ -9,7 +9,8 @@
 #      (`gladys-assistant-integration.json`: both `version` and the
 #      `docker_image` tag, so the indexer and the image stay in lockstep);
 #   3. commits the bump and pushes the `vX.Y.Z` tag;
-#   4. calls build.yml to publish the multi-arch image (`:X.Y.Z` + `:latest`).
+#   4. publishes a GitHub Release with auto-generated notes;
+#   5. calls build.yml to publish the multi-arch image (`:X.Y.Z` + `:latest`).
 #
 # Why call build.yml instead of relying on the tag push: a tag pushed with the
 # default GITHUB_TOKEN does NOT trigger other workflows, so we invoke the build
@@ -71,6 +72,10 @@ jobs:
             gladys-assistant-integration.json > "$tmp"
           mv "$tmp" gladys-assistant-integration.json
 
+          # jq's formatting is not Prettier's, and `npm run format:check` is a
+          # CI gate: without this the release commit turns main red on itself.
+          npx --yes prettier@3 --write gladys-assistant-integration.json
+
           echo "version=${new_version}" >> "$GITHUB_OUTPUT"
 
       # Note: if the branch you release from is protected against direct pushes,
@@ -91,6 +96,19 @@ jobs:
 
           git push origin "HEAD:${GITHUB_REF_NAME}"
           git push origin "v${VERSION}"
+
+      # The tag alone is not discoverable: publish a GitHub Release so users and
+      # the store see what changed between two versions.
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --verify-tag
 
   # Build and publish the image for the version we just tagged.
   build:

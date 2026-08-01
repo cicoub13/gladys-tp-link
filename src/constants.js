@@ -13,6 +13,12 @@
 export const DEVICE_KINDS = {
   PLUG: 'plug',
   BULB: 'bulb',
+  // Multi-outlet strips (HS300, HS107, KP303, KP400): announced as
+  // IOT.SMARTPLUGSWITCH like a single plug, but their state lives in
+  // `sysinfo.children[]` and a command without a childId switches every outlet
+  // at once. Detected on purpose so they are skipped with a clear message
+  // instead of being published as a plug that cannot work.
+  POWER_STRIP: 'power-strip',
   UNKNOWN: 'device',
 };
 
@@ -39,3 +45,11 @@ export const TP_LINK_DEVICE_TYPES = {
 // Gladys (1 = on, 0 = off) at the edges only.
 export const ON = 1;
 export const OFF = 0;
+
+// Per-device transport badge published with `gladys.publishTransports()`. This
+// integration only speaks to the LAN, so a device is either reachable there or
+// not reachable at all.
+export const TRANSPORTS = {
+  LOCAL: 'local',
+  UNREACHABLE: 'unreachable',
+};
