@@ -1,80 +1,95 @@
 # Changelog
 
 All notable changes to this integration are documented here. This project
-follows [Semantic Versioning](https://semver.org/).
+follows [Semantic Versioning](https://semver.org/) and the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
-## [Unreleased]
+## [1.2.2] - 2026-08-14
+
+### Removed
+
+- **The `/data` volume ownership workaround.** The fix introduced in 1.2.1 is
+  no longer needed — the underlying permission issue is now handled by Gladys
+  Core.
+
+## [1.2.1] - 2026-08-01
 
 ### Fixed
 
-- **A failed scan is no longer silent.** `onScanRequest` is an unacked SDK
-  event, so anything it threw was swallowed: a rate-limited scan (the core
-  allows one every 10 seconds — double-clicking "scan" is enough), a refused
-  capture or a network error left the user with no feedback and no log line at
-  all. Failures are now logged and reported through `setConnectionStatus`, with
-  a dedicated message per cause.
-- **The wrong device could be controlled after a DHCP lease change.** The
-  serial number was stored but never checked, so once an IP was reassigned a
-  poll published another device's state and a command switched another device.
-  The identity is now verified before every read and every command.
-- **An unusable refresh interval fell back to 1 second instead of the default.**
-  An empty or corrupted `poll_frequency` produced the chattiest frequency of the
-  set — 60x the intended network, history and trigger load — because every
-  comparison against `NaN` is false. It now falls back to 60 seconds.
-- **`'1'` as a string turned the device off.** The requested value was compared
-  strictly against the number `1`; it is now coerced, and anything that is
-  neither 0 nor 1 is rejected instead of silently meaning OFF.
-- **The release workflow broke the CI it depends on.** The manifest rewritten by
-  `jq` did not match Prettier, so every release turned `main` red on its own
-  formatting gate. The workflow now formats the manifest before committing.
-- `gladys_version` corrected from `>=4.62.0` to `>=4.84.0`, the release that
-  actually introduced external integrations and mediated discovery.
-- `cover.png` was a JPEG file with a `.png` extension, which the store validator
-  can reject. It is now a real PNG.
+- **The data volume is now writable at runtime.** Declaring `/data` left its
+  directory owned by root while the container runs as an unprivileged user,
+  causing a permission error on the one location the image documents as
+  writable. The directory is now created and owned by the runtime user.
+
+## [1.2.0] - 2026-08-01
 
 ### Added
 
-- Devices are flagged `unreachable` in the Gladys UI when they stop answering,
-  and back to `local` when they recover.
-- Multi-outlet strips (HS300, HS107, KP303, KP400) are detected and skipped with
-  an explicit message. They announce themselves as ordinary plugs but keep their
-  state in `children[]`, so they were published as a single switch that turned
-  the whole strip off at once.
-- Poll and command failures are logged, and the raw driver error — multi-line,
-  with the protocol JSON in it — is replaced by a short actionable sentence
-  before reaching the user.
-- Coverage thresholds enforced in CI, which now also runs on Node 20, 22 and 24
-  (the range `engines` declares) and audits production dependencies.
-- A test that keeps the manifest and the code in sync: discovery port, accepted
-  poll frequencies, default value and version.
+- **Unreachable devices are flagged in Gladys** and switch back to `local`
+  automatically once they respond again.
+- **Multi-outlet power strips (HS300, HS107, KP303, KP400) are detected and
+  skipped** with a clear message, instead of appearing as a single switch that
+  would turn the whole strip off at once.
+- **Failures are logged**, and raw driver errors are turned into short,
+  actionable messages before they reach the user.
+- **Test coverage thresholds are enforced in CI**, which also runs on Node 20,
+  22 and 24 and audits production dependencies.
 
 ### Changed
 
-- States are published only when they actually change. Gladys does not
-  deduplicate — every state writes a history row, broadcasts a websocket event
-  and re-evaluates every trigger, against a budget of 300 states per minute.
-- A command now publishes the state read back from the device rather than the
-  one requested, so a frame acked but not applied cannot show a state Gladys
-  never verified.
-- A poll that started before a command can no longer overwrite the state that
-  command published, which made the switch visibly flip back in the UI.
-- The driver timeout is set to 2 s (it defaulted to 10 s, twice per command)
-  so a command fits inside the 5 s ack window and requests stop piling up on an
-  unreachable device.
-- `Dockerfile` no longer falls back to `npm install` when `npm ci` fails, which
-  silently discarded the lockfile.
+- **State is published only when it actually changes**, cutting redundant
+  history rows, websocket events and trigger re-evaluations.
+- **A command reports the state the device confirmed**, not merely the one
+  requested, so a command that was not applied cannot show a false state.
+- **A poll started before a command can no longer overwrite its result** and
+  make the switch visibly flip back in the UI.
+- **Commands respond faster** (2 s driver timeout), so they fit the
+  acknowledgement window and requests stop piling up on unresponsive devices.
+- **The Docker image always builds from the lockfile**, no longer falling back
+  to `npm install`.
 
-## [1.1.0]
+### Fixed
 
-- Replaced the IP-list configuration with the mediated `udp-active-broadcast`
-  scan: no IP address to enter, the core broadcasts on the integration's behalf.
+- **Scans always report their result.** A rate-limited scan (one every 10 s), a
+  refused capture or a network error used to fail silently; the cause is now
+  logged and shown through the connection status.
+- **The right device is always controlled.** The serial number was stored but
+  never verified, so after a DHCP lease change a poll or command could act on
+  another device. Identity is now checked before every read and every command.
+- **An invalid refresh interval now falls back to the 60-second default**
+  instead of polling every second.
+- **`'1'` as a string no longer turns a device off.** Values are coerced, and
+  anything that is neither 0 nor 1 is rejected.
+- **The release workflow no longer breaks CI** — the manifest is now formatted
+  before committing.
+- **The manifest declares the correct minimum Gladys version** (`>=4.84.0`).
+- **The catalog cover is now a real PNG**, not a JPEG with a `.png` extension.
 
-## [1.0.1]
+## [1.1.0] - 2026-07-23
 
-- Fixed a silent discovery failure: `poll_frequency` must be in milliseconds,
-  from the closed set Gladys core accepts.
+### Added
 
-## [1.0.0]
+- **Discovery without IP addresses.** The IP-list configuration is replaced by
+  Gladys' mediated `udp-active-broadcast` scan: the integration finds Kasa
+  devices on the local network automatically, with no address to enter.
+- **User documentation** in English and French.
 
-- First release: TP-Link Kasa plugs, switches and bulbs, On/Off control over the
-  local network.
+## [1.0.1] - 2026-07-22
+
+### Fixed
+
+- **Scanning now works out of the box.** The refresh interval was sent in the
+  wrong unit, so Gladys silently rejected every discovered device and the
+  Discovery tab stayed empty. The interval is now expressed correctly.
+
+### Changed
+
+- **The refresh interval is now a fixed set of choices** (1, 2, 10, 15, 30 or
+  60 seconds) instead of a free number field.
+
+[Unreleased]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/cicoub13/gladys-tp-link/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/cicoub13/gladys-tp-link/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/cicoub13/gladys-tp-link/releases/tag/v1.0.1

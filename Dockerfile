@@ -26,11 +26,8 @@ COPY index.js ./
 COPY src ./src
 COPY gladys-assistant-integration.json ./
 
-# The only writable location allowed at runtime. Created and owned by `node`
-# here: declaring the volume alone leaves the directory root-owned, and the
-# unprivileged runtime user then hits EACCES on its own data directory.
+# The only writable location allowed at runtime.
 ENV NODE_ENV=production
-RUN mkdir -p /data && chown node:node /data
 VOLUME ["/data"]
 
 # Run as an unprivileged user (already present in the node image).
