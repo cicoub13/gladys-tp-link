@@ -19,6 +19,7 @@ import { createClient } from './src/tplink/client.js';
 import { handleScanRequest } from './src/discovery.js';
 import { handleSetValue } from './src/setValue.js';
 import { handlePoll } from './src/poll.js';
+import { connectAndStayAlive } from './src/lifecycle.js';
 
 const gladys = new GladysIntegration();
 const tpClient = createClient();
@@ -84,7 +85,4 @@ gladys.handleShutdown((signal) => {
 
 // --- Startup -----------------------------------------------------------------
 logger.info('Starting the TP-Link integration...');
-gladys.connect().catch((err) => {
-  logger.error('Initial connection failed', err);
-  process.exit(1);
-});
+connectAndStayAlive(gladys, { logger });
