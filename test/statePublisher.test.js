@@ -65,3 +65,38 @@ test('publishDeviceTransport publishes only on change', async () => {
     { external_id: 'd1', transport: TRANSPORTS.UNREACHABLE },
   ]);
 });
+
+test('publishFeatureState publishes again after a failed publish of the same value', async () => {
+  // A failed publish must not be remembered as published: otherwise every
+  // later poll reading the same value is dropped as "unchanged", and Gladys
+  // keeps showing the previous state until the device changes again.
+  const gladys = createFakeGladys();
+  gladys.failNext('publishState');
+
+  await assert.rejects(() => publishFeatureState(gladys, 'f1', 1), { status: 429 });
+  assert.equal(await publishFeatureState(gladys, 'f1', 1), true);
+
+  assert.deepEqual(gladys.published, [{ featureExternalId: 'f1', state: 1 }]);
+});
+
+test('publishFeatureState keeps the previous value as reference after a failed publish', async () => {
+  const gladys = createFakeGladys();
+
+  await publishFeatureState(gladys, 'f1', 0);
+  gladys.failNext('publishState');
+  await assert.rejects(() => publishFeatureState(gladys, 'f1', 1), { status: 429 });
+
+  // 0 is still what Gladys holds: re-reading 0 needs no publish, 1 does.
+  assert.equal(await publishFeatureState(gladys, 'f1', 0, Date.now() + 1000), false);
+  assert.equal(await publishFeatureState(gladys, 'f1', 1, Date.now() + 1000), true);
+});
+
+test('publishDeviceTransport publishes again after a failed publish of the same transport', async () => {
+  const gladys = createFakeGladys();
+  gladys.failNext('publishTransports');
+
+  await assert.rejects(() => publishDeviceTransport(gladys, 'd1', TRANSPORTS.UNREACHABLE), { status: 429 });
+  assert.equal(await publishDeviceTransport(gladys, 'd1', TRANSPORTS.UNREACHABLE), true);
+
+  assert.deepEqual(gladys.transports, [{ external_id: 'd1', transport: TRANSPORTS.UNREACHABLE }]);
+});

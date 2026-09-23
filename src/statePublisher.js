@@ -34,8 +34,17 @@ export async function publishFeatureState(gladys, featureExternalId, value, read
   if (previous && (previous.value === value || previous.at > readAt)) {
     return false;
   }
-  lastStates.set(featureExternalId, { value, at: Date.now() });
-  await gladys.publishState(featureExternalId, value);
+  // Recorded before the await so a concurrent stale poll is already dropped,
+  // but rolled back if the publish fails: a value Gladys never received must
+  // not be deduplicated away on the next poll.
+  const entry = { value, at: Date.now() };
+  lastStates.set(featureExternalId, entry);
+  try {
+    await gladys.publishState(featureExternalId, value);
+  } catch (err) {
+    rollback(lastStates, featureExternalId, entry, previous);
+    throw err;
+  }
   return true;
 }
 
@@ -49,12 +58,40 @@ export async function publishFeatureState(gladys, featureExternalId, value, read
  * await publishDeviceTransport(gladys, device.external_id, 'unreachable');
  */
 export async function publishDeviceTransport(gladys, deviceExternalId, transport) {
-  if (lastTransports.get(deviceExternalId) === transport) {
+  const previous = lastTransports.get(deviceExternalId);
+  if (previous === transport) {
     return false;
   }
   lastTransports.set(deviceExternalId, transport);
-  await gladys.publishTransports([{ external_id: deviceExternalId, transport }]);
+  try {
+    await gladys.publishTransports([{ external_id: deviceExternalId, transport }]);
+  } catch (err) {
+    rollback(lastTransports, deviceExternalId, transport, previous);
+    throw err;
+  }
   return true;
+}
+
+/**
+ * Undo a cache entry after a failed publish, unless a later publish already
+ * replaced it.
+ * @param {Map} cache - lastStates or lastTransports.
+ * @param {string} key - The external id.
+ * @param {unknown} entry - The entry the failed publish recorded.
+ * @param {unknown} previous - The entry before it (undefined when none).
+ * @returns {void}
+ * @example
+ * rollback(lastTransports, 'd1', 'local', undefined);
+ */
+function rollback(cache, key, entry, previous) {
+  if (cache.get(key) !== entry) {
+    return;
+  }
+  if (previous === undefined) {
+    cache.delete(key);
+  } else {
+    cache.set(key, previous);
+  }
 }
 
 /**
