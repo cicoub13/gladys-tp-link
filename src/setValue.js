@@ -83,7 +83,8 @@ export async function handleSetValue(gladys, tpClient, { device, feature, value 
   });
 
   // Publish what the device reports, falling back to the requested value if the
-  // read-back is unusable — the command did succeed, the UI must reflect it.
-  const readBack = readOnOff(classify(sysInfo), sysInfo);
+  // read-back is unusable or missing (null: it failed or ran out of time) — the
+  // command did succeed, the UI must reflect it.
+  const readBack = sysInfo ? readOnOff(classify(sysInfo), sysInfo) : undefined;
   await publishFeatureState(gladys, feature.external_id, typeof readBack === 'number' ? readBack : Number(on));
 }

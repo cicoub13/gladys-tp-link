@@ -138,6 +138,19 @@ test('handleSetValue still publishes the state when the transport badge cannot b
   assert.deepEqual(gladys.published, [{ featureExternalId: feature.external_id, state: 1 }]);
 });
 
+test('handleSetValue publishes the requested state when the device state could not be read back', async () => {
+  const gladys = createFakeGladys();
+  const device = buildPlug(gladys);
+  const feature = device.features[0];
+  // The command went through but the read-back ran out of time (see
+  // src/tplink/client.js): the wrapper returns null instead of a sysinfo.
+  const tpClient = { setPowerState: async () => null };
+
+  await handleSetValue(gladys, tpClient, { device, feature, value: 1 });
+
+  assert.deepEqual(gladys.published, [{ featureExternalId: feature.external_id, state: 1 }]);
+});
+
 test('handleSetValue reports a device with no stored address', async () => {
   const gladys = createFakeGladys();
   const device = buildPlug(gladys);
