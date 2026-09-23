@@ -24,3 +24,22 @@ export async function connectAndStayAlive(gladys, { logger }) {
     logger.error('Initial connection failed, the SDK keeps retrying in the background', err);
   }
 }
+
+/**
+ * Log an unhandled promise rejection with its reason, then exit so the Gladys
+ * supervisor restarts the integration: nothing is known to reject unhandled,
+ * so one that does leaves the process in an unknown state.
+ * @param {object} deps - Dependencies.
+ * @param {object} deps.logger - Logger with an error() method.
+ * @param {EventEmitter} [deps.target] - The process (injected for tests).
+ * @param {Function} [deps.exit] - process.exit (injected for tests).
+ * @returns {void}
+ * @example
+ * exitOnUnhandledRejection({ logger });
+ */
+export function exitOnUnhandledRejection({ logger, target = process, exit = (code) => process.exit(code) }) {
+  target.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection, exiting so the integration is restarted', reason);
+    exit(1);
+  });
+}

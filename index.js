@@ -19,7 +19,10 @@ import { createClient } from './src/tplink/client.js';
 import { handleScanRequest } from './src/discovery.js';
 import { handleSetValue } from './src/setValue.js';
 import { handlePoll } from './src/poll.js';
-import { connectAndStayAlive } from './src/lifecycle.js';
+import { connectAndStayAlive, exitOnUnhandledRejection } from './src/lifecycle.js';
+
+// Installed first, so it also covers the rest of the startup.
+exitOnUnhandledRejection({ logger });
 
 const gladys = new GladysIntegration();
 const tpClient = createClient();

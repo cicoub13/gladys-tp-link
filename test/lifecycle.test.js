@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { connectAndStayAlive } from '../src/lifecycle.js';
+import { EventEmitter } from 'node:events';
+import { connectAndStayAlive, exitOnUnhandledRejection } from '../src/lifecycle.js';
 
 function createRecordingLogger() {
   const errors = [];
@@ -36,4 +37,20 @@ test('connectAndStayAlive resolves quietly on a successful connection', async ()
   await connectAndStayAlive({ connect: async () => {} }, { logger });
 
   assert.equal(logger.errors.length, 0);
+});
+
+test('exitOnUnhandledRejection logs the reason then exits with code 1', () => {
+  // A rejection nobody handles means the integration is in an unknown state:
+  // log it with its reason, then exit so the Gladys supervisor restarts it.
+  const target = new EventEmitter();
+  const logger = createRecordingLogger();
+  const exits = [];
+  exitOnUnhandledRejection({ target, logger, exit: (code) => exits.push(code) });
+
+  const reason = new Error('boom');
+  target.emit('unhandledRejection', reason);
+
+  assert.deepEqual(exits, [1]);
+  assert.match(logger.errors[0][0], /Unhandled promise rejection/);
+  assert.equal(logger.errors[0][1], reason);
 });
