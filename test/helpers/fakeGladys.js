@@ -9,6 +9,8 @@
 //   - publishTransports               -> recorded for assertions
 //   - getDevices                      -> returns the injected devices
 //   - setConnectionStatus             -> recorded for assertions
+//   - failNext(method, times)         -> the next `times` calls of publishState /
+//                                        publishTransports reject with a 429
 // -----------------------------------------------------------------------------
 
 export function createFakeGladys({ devices = [], scanReplies = [], scanError, publishError } = {}) {
@@ -17,6 +19,17 @@ export function createFakeGladys({ devices = [], scanReplies = [], scanError, pu
   const connectionStatuses = [];
   const scanCalls = [];
   const transports = [];
+  // method name -> how many upcoming calls must still fail.
+  const pendingFailures = {};
+
+  function maybeFail(method) {
+    if (pendingFailures[method] > 0) {
+      pendingFailures[method] -= 1;
+      const err = new Error('Too Many Requests');
+      err.status = 429;
+      throw err;
+    }
+  }
 
   return {
     devices,
@@ -34,7 +47,12 @@ export function createFakeGladys({ devices = [], scanReplies = [], scanError, pu
       return scanReplies;
     },
 
+    failNext(method, times = 1) {
+      pendingFailures[method] = times;
+    },
+
     async publishTransports(entries) {
+      maybeFail('publishTransports');
       transports.push(...entries);
       return { success: true };
     },
@@ -48,6 +66,7 @@ export function createFakeGladys({ devices = [], scanReplies = [], scanError, pu
     },
 
     async publishState(featureExternalId, state) {
+      maybeFail('publishState');
       published.push({ featureExternalId, state });
       return { success: true };
     },

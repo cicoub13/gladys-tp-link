@@ -76,7 +76,11 @@ export async function handleSetValue(gladys, tpClient, { device, feature, value 
     throw toUserFacingError(err, `TP-Link device unreachable at ${host}: check it is powered on and on your network`);
   }
 
-  await publishDeviceTransport(gladys, full.external_id, TRANSPORTS.LOCAL);
+  // Guarded: the command already reached the device, a failed badge update
+  // must not hide its new state nor report the command as failed.
+  await publishDeviceTransport(gladys, full.external_id, TRANSPORTS.LOCAL).catch((reportErr) => {
+    logger.error('Could not publish the local transport', reportErr);
+  });
 
   // Publish what the device reports, falling back to the requested value if the
   // read-back is unusable — the command did succeed, the UI must reflect it.
