@@ -12,6 +12,18 @@ starting from the official
 Under the hood it uses the same driver as the core service,
 [`tplink-smarthome-api`](https://github.com/plasticrake/tplink-smarthome-api).
 
+## Screenshots
+
+Plugs and bulbs on a dashboard, with their on/off history over the last 24 hours:
+
+![TP-Link Kasa plugs and bulbs on a Gladys dashboard](docs/images/dashboard.png)
+
+A scan in the **Discovery** tab lists the devices that answered, with those already added to Gladys:
+
+![TP-Link Kasa devices found by a scan in the Discovery tab](docs/images/discovery.png)
+
+_Captured on a Gladys 5.1 dashboard with simulated devices and states — values are illustrative._
+
 ## Supported devices
 
 | TP-Link type (`sysinfo.type`)                        | Gladys device | Feature           |
