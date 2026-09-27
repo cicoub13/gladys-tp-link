@@ -4,6 +4,34 @@ All notable changes to this integration are documented here. This project
 follows [Semantic Versioning](https://semver.org/) and the
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [Unreleased]
+
+## [1.3.0] - 2026-09-23
+
+### Fixed
+
+- **A command on a slow plug is no longer reported as failed.** A command made
+  four round-trips to the plug, each allowed 2 s: on a slow Wi-Fi plug Gladys
+  stopped waiting after 5 s and showed "failed" although the relay had
+  switched. A command now makes three round-trips within 4 s, and a missing
+  read-back no longer fails it.
+- **A state switched by hand is no longer lost when Gladys briefly refuses a
+  publish.** The new value was remembered as sent even when Gladys refused it
+  (429, restart), so Gladys kept showing the old state until the relay changed
+  again. A refused publish is now retried at the next poll.
+- **The integration waits for Gladys when it starts before it.** If Gladys was
+  still booting and refused the token, the process exited. It now logs the
+  refusal and keeps retrying.
+- **An unexpected error is logged before the integration restarts**, instead of
+  ending the process with a raw trace outside the integration logs.
+
+## [1.2.3] - 2026-09-23
+
+### Changed
+
+- Maintenance release: integration SDK 0.14.0 and a smaller, hardened Docker
+  image. No functional change.
+
 ## [1.2.2] - 2026-08-14
 
 ### Removed
@@ -87,7 +115,9 @@ follows [Semantic Versioning](https://semver.org/) and the
 - **The refresh interval is now a fixed set of choices** (1, 2, 10, 15, 30 or
   60 seconds) instead of a free number field.
 
-[Unreleased]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.3...v1.3.0
+[1.2.3]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/cicoub13/gladys-tp-link/compare/v1.1.0...v1.2.0
