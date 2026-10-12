@@ -54,6 +54,11 @@ gladys.onSetValue(async (device, feature, value) => {
   await handleSetValue(gladys, tpClient, { device, feature, value });
 });
 
+// --- Polling: a no-op, src/poller.js refreshes the devices ------------------
+// Devices created before the own timer still carry a poll_frequency. Should a
+// Gladys version start polling them, ack instead of answering "not implemented".
+gladys.onPoll(() => {});
+
 // --- Configuration updated by the user ---------------------------------------
 // Wrapped because onConfigUpdated is unacked too: an error here would leave the
 // integration silently running on the previous configuration.
