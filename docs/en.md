@@ -42,9 +42,10 @@ stays stable; if it changes, a new scan picks up the new address automatically.
 2. Choose a **Refresh interval** — how often each device is polled to refresh
    its state (default: every minute). Save.
 
-   > This interval is stored on each device when it is discovered. Changing it
-   > later does **not** update the devices you already created: run a new scan
-   > to apply the new value.
+   > The integration polls all your created devices itself at this interval.
+   > Changing it applies to every device right away, no new scan needed: a
+   > device switched by hand, from the Kasa app or by its own schedule shows its
+   > new state in Gladys by the next poll at the latest.
 
 3. Open the **Discovery** tab and click **scan**: your Kasa devices appear.
 4. Click **create** on the ones you want. They land in the **Devices** tab with

@@ -12,20 +12,19 @@
 // -----------------------------------------------------------------------------
 
 export const DEFAULT_CONFIG = {
-  // How often Gladys polls each device, in seconds.
+  // How often the integration polls each device, in seconds (src/poller.js).
   poll_frequency: 60,
 };
 
-// The only poll frequencies (in seconds) Gladys core accepts on a published
-// device — it validates poll_frequency in milliseconds against the closed set
-// [1000, 2000, 10000, 15000, 30000, 60000]. Any other value makes
-// publishDiscoveredDevices fail (silently: onScanRequest is an unacked SDK
-// event), so a stale/out-of-range stored value must be snapped to this set
-// rather than passed through.
+// The poll frequencies (in seconds) offered by the manifest select. Originally
+// the closed set Gladys core accepts on a published device; kept as is now that
+// the integration polls on its own timer, so stored settings stay valid. A
+// stale/out-of-range stored value is snapped to this set rather than passed
+// through (a 0 or a garbage value would make the timer spin or never fire).
 const POLL_FREQUENCIES_SECONDS = [1, 2, 10, 15, 30, 60];
 
 /**
- * Snap a poll frequency (seconds) to the nearest value Gladys core accepts.
+ * Snap a poll frequency (seconds) to the nearest accepted value.
  * @param {number} seconds - The requested poll frequency, in seconds.
  * @returns {number} The nearest value among POLL_FREQUENCIES_SECONDS.
  * @example

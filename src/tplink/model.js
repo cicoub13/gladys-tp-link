@@ -83,13 +83,12 @@ export function assertExpectedDevice(sysInfo, expectedDeviceId, host) {
  * @param {object} gladys - The GladysIntegration SDK instance.
  * @param {object} sysInfo - The TP-Link `sysinfo` object.
  * @param {string} host - The device IP address.
- * @param {object} config - The normalized integration configuration.
  * @returns {{ kind: string, device: (object|null) }} The kind and the payload
  *   (null for an unsupported device, so the caller can skip it).
  * @example
- * buildDevice(gladys, sysInfo, '192.168.1.10', config);
+ * buildDevice(gladys, sysInfo, '192.168.1.10');
  */
-export function buildDevice(gladys, sysInfo, host, config) {
+export function buildDevice(gladys, sysInfo, host) {
   const kind = classify(sysInfo);
   const ids = gladys.externalIds(kind, sysInfo.deviceId);
   const alias = sysInfo.alias || sysInfo.dev_name || `TP-Link ${sysInfo.deviceId}`;
@@ -97,10 +96,8 @@ export function buildDevice(gladys, sysInfo, host, config) {
   const device = {
     name: alias,
     external_id: ids.device,
-    // Gladys core only accepts a poll_frequency in milliseconds, from a closed
-    // set (1/2/10/15/30/60s) — config.poll_frequency is validated against that
-    // same set, in seconds (see src/config.js).
-    poll_frequency: config.poll_frequency * 1000,
+    // No should_poll / poll_frequency: Gladys does not poll these devices, the
+    // integration refreshes them on its own timer (see src/poller.js).
     params: [
       { name: PARAMS.IP_ADDRESS, value: host },
       { name: PARAMS.SERIAL_NUMBER, value: sysInfo.deviceId },
