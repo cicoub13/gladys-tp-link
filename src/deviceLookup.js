@@ -2,7 +2,7 @@
 // Resolve the runtime facts a command needs about a device: its IP address and
 // its controllable feature.
 //
-// The device object Gladys hands to onSetValue / onPoll may be lightweight, so
+// The device object Gladys hands to onSetValue may be lightweight, so
 // — like the core, which re-read `gladys.device.get({ service })` — we make sure
 // we hold the full device (with `params` and `features`), falling back to
 // `gladys.getDevices()` when needed.

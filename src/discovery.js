@@ -26,12 +26,11 @@ const SCAN_TIMEOUT_SECONDS = 5;
 /**
  * Scan for TP-Link devices and build their discovery payloads.
  * @param {object} gladys - The GladysIntegration SDK instance.
- * @param {object} config - The normalized integration configuration.
  * @returns {Promise<Array>} The discovery payloads for the supported devices.
  * @example
- * await scan(gladys, config);
+ * await scan(gladys);
  */
-export async function scan(gladys, config) {
+export async function scan(gladys) {
   const replies = await gladys.scanNetwork('udp-active-broadcast', {
     port: DISCOVERY_PORT,
     payload: buildDiscoveryRequest(),
@@ -59,7 +58,7 @@ export async function scan(gladys, config) {
   // Build the payloads, skipping the unsupported device types.
   const devices = [];
   for (const { sysInfo, host } of responders.values()) {
-    const { kind, device } = buildDevice(gladys, sysInfo, host, config);
+    const { kind, device } = buildDevice(gladys, sysInfo, host);
     if (kind === DEVICE_KINDS.POWER_STRIP) {
       logger.warn(
         `Skipping "${sysInfo.alias}" (model ${sysInfo.model}): multi-outlet TP-Link strips are not supported yet`,
@@ -108,14 +107,13 @@ const SCAN_ERROR_MESSAGES = {
  * Never throws — a failure is logged AND surfaced to the user, because the SDK
  * swallows exceptions thrown from an unacked handler.
  * @param {object} gladys - The GladysIntegration SDK instance.
- * @param {object} config - The normalized integration configuration.
  * @returns {Promise<void>} Resolves once the outcome has been reported.
  * @example
- * gladys.onScanRequest(() => handleScanRequest(gladys, config));
+ * gladys.onScanRequest(() => handleScanRequest(gladys));
  */
-export async function handleScanRequest(gladys, config) {
+export async function handleScanRequest(gladys) {
   try {
-    const devices = await scan(gladys, config);
+    const devices = await scan(gladys);
     await gladys.publishDiscoveredDevices(devices);
     await gladys.setConnectionStatus(true);
   } catch (err) {

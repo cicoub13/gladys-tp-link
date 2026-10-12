@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
-// Refresh a device state on Gladys' schedule — port of the core
-// `smart-device.poll.js`.
+// Refresh a device state, called for each created device by the integration's
+// own timer (src/poller.js) — port of the core `smart-device.poll.js`.
 //
 // Read the current sysinfo by unicast, check the address is still held by the
 // device we expect, extract the ON/OFF state depending on the device kind (plug
@@ -26,7 +26,7 @@ const logger = createLogger({ name: 'tp-link-poll' });
  * @param {object} tpClient - The TP-Link client wrapper.
  * @param {object} device - The device to poll.
  * @returns {Promise<void>} Resolves once the state has been published.
- * @throws {Error} When the device cannot be read, so the SDK acks the failure.
+ * @throws {Error} When the device cannot be read, so the poller logs the failure.
  * @example
  * await handlePoll(gladys, tpClient, device);
  */

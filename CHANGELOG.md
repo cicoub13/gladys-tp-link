@@ -6,6 +6,16 @@ follows [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Device states are now refreshed at the configured interval.** Gladys never
+  actually polled the created devices, so a plug or bulb switched by hand, from
+  the Kasa app or by its own schedule kept showing its old state in Gladys, and
+  the Refresh interval setting had no effect. The integration now polls every
+  created device itself, every N seconds as the setting says (every minute by
+  default). Changing the interval applies right away to all devices, already
+  created ones included: no new scan is needed.
+
 ## [1.3.0] - 2026-09-23
 
 ### Fixed

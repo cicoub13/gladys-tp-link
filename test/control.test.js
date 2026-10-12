@@ -5,15 +5,12 @@ import { handleSetValue } from '../src/setValue.js';
 import { handlePoll } from '../src/poll.js';
 import { buildDevice } from '../src/tplink/model.js';
 import { PARAMS, TRANSPORTS } from '../src/constants.js';
-import { normalizeConfig } from '../src/config.js';
 import { resetPublishedState } from '../src/statePublisher.js';
 import { createFakeGladys } from './helpers/fakeGladys.js';
 import { createFakeTpLink, PLUG_SYSINFO, BULB_SYSINFO } from './helpers/fakeTpLink.js';
 
-const config = normalizeConfig();
-
 function buildPlug(gladys, host = '192.168.1.10') {
-  return buildDevice(gladys, PLUG_SYSINFO, host, config).device;
+  return buildDevice(gladys, PLUG_SYSINFO, host).device;
 }
 
 // The publisher deduplicates through module-level state, so each test must
@@ -181,7 +178,7 @@ test('handlePoll publishes the plug relay_state to its ON/OFF feature', async ()
 test('handlePoll publishes the bulb light_state.on_off', async () => {
   const gladys = createFakeGladys();
   const tpClient = createFakeTpLink({ byHost: { '192.168.1.11': { ...BULB_SYSINFO, light_state: { on_off: 1 } } } });
-  const device = buildDevice(gladys, BULB_SYSINFO, '192.168.1.11', config).device;
+  const device = buildDevice(gladys, BULB_SYSINFO, '192.168.1.11').device;
 
   await handlePoll(gladys, tpClient, device);
 

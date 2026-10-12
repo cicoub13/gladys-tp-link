@@ -19,6 +19,7 @@ import { createClient } from './src/tplink/client.js';
 import { handleScanRequest } from './src/discovery.js';
 import { handleSetValue } from './src/setValue.js';
 import { handlePoll } from './src/poll.js';
+import { createPoller } from './src/poller.js';
 import { connectAndStayAlive, exitOnUnhandledRejection } from './src/lifecycle.js';
 
 // Installed first, so it also covers the rest of the startup.
@@ -30,23 +31,27 @@ const tpClient = createClient();
 // Current configuration, hot-reloaded via onConfigUpdated.
 let config = normalizeConfig();
 
+// Refreshes every created device every config.poll_frequency seconds: Gladys
+// never polls them itself (see src/poller.js). The SDK keeps `gladys.devices`
+// up to date (resynchronized on every connection, then on each device
+// created/updated/deleted event).
+const poller = createPoller({
+  listDevices: () => gladys.devices,
+  pollDevice: (device) => handlePoll(gladys, tpClient, device),
+});
+
 // --- Discovery: the user clicked "scan" in the Discovery tab -----------------
 // onScanRequest is an unacked SDK event: an error thrown from here is swallowed
 // into the SDK debug channel (no ack, no visible log), so handleScanRequest owns
 // the reporting and never throws — see src/discovery.js.
 gladys.onScanRequest(async () => {
   logger.info('onScanRequest -> scanning for TP-Link devices');
-  await handleScanRequest(gladys, config);
+  await handleScanRequest(gladys);
 });
 
 // --- Command: the user acted on a controllable feature -----------------------
 gladys.onSetValue(async (device, feature, value) => {
   await handleSetValue(gladys, tpClient, { device, feature, value });
-});
-
-// --- Polling: Gladys asks to refresh a device --------------------------------
-gladys.onPoll(async (device) => {
-  await handlePoll(gladys, tpClient, device);
 });
 
 // --- Configuration updated by the user ---------------------------------------
@@ -59,6 +64,8 @@ gladys.onConfigUpdated(async (newConfig) => {
   } catch (err) {
     logger.error('Could not apply the new configuration, keeping the previous one', err);
   }
+  // Re-arms the loop when the refresh interval changed (no-op while stopped).
+  await poller.update(config.poll_frequency);
 });
 
 // --- Connection lifecycle ----------------------------------------------------
@@ -79,11 +86,23 @@ gladys.on('connected', async () => {
       })
       .catch(() => {});
   }
+  // Started even when the step above failed: the SDK resynchronized the
+  // devices before emitting 'connected', and they still need refreshing.
+  // Unless the connection dropped meanwhile: 'disconnected' already stopped it.
+  if (gladys.connected) {
+    poller.start(config.poll_frequency);
+  }
+});
+
+// No timer left running while Gladys is unreachable: 'connected' restarts it.
+gladys.on('disconnected', () => {
+  poller.stop();
 });
 
 // --- Graceful shutdown -------------------------------------------------------
 gladys.handleShutdown((signal) => {
   logger.info(`Received ${signal} -> graceful shutdown`);
+  poller.stop();
 });
 
 // --- Startup -----------------------------------------------------------------

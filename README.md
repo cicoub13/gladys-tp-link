@@ -72,14 +72,16 @@ capture the manifest does not declare.
 4. Click **create** on the ones you want. They land in the **Devices** tab with
    an On/Off control, and are polled every `poll_frequency` seconds.
 
-The refresh interval is written onto each device at discovery time, so changing
-it only affects devices created by a **later** scan.
+The integration polls the created devices on its own timer (`src/poller.js`),
+not through Gladys' `onPoll` scheduler: the published devices carry no
+`should_poll`/`poll_frequency`. So changing the refresh interval applies to
+every device right away, without a new scan.
 
 ## Configuration
 
-| Key              | Type   | Default | Description                                                                                                                                                                         |
-| ---------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `poll_frequency` | select | `60`    | How often each device is polled, in seconds. One of `1`, `2`, `10`, `15`, `30`, `60` — the only values Gladys core accepts on a published device (in milliseconds, under the hood). |
+| Key              | Type   | Default | Description                                                                                                                                         |
+| ---------------- | ------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `poll_frequency` | select | `60`    | How often each created device is polled, in seconds. One of `1`, `2`, `10`, `15`, `30`, `60`; any other stored value is snapped to the nearest one. |
 
 ## Project structure
 
@@ -94,7 +96,8 @@ it only affects devices created by a **later** scan.
 │  ├─ errors.js                      # driver errors -> readable user messages
 │  ├─ statePublisher.js              # publish to Gladys only what actually changed
 │  ├─ setValue.js                    # onSetValue: ON/OFF command
-│  ├─ poll.js                        # onPoll: refresh state
+│  ├─ poll.js                        # refresh one device's state
+│  ├─ poller.js                      # timer polling every created device
 │  └─ tplink/
 │     ├─ client.js                   # thin wrapper around tplink-smarthome-api (unicast)
 │     ├─ protocol.js                 # Kasa discovery codec (forge request / decode reply)

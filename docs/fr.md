@@ -45,9 +45,11 @@ automatiquement la nouvelle adresse.
    d'interrogation de chaque appareil pour rafraîchir son état (par défaut :
    toutes les minutes). Enregistrez.
 
-   > Cet intervalle est enregistré sur chaque appareil au moment où il est
-   > découvert. Le modifier plus tard ne change **pas** les appareils déjà
-   > créés : relancez un scan pour appliquer la nouvelle valeur.
+   > L'intégration interroge elle-même tous vos appareils créés à cet
+   > intervalle. Le modifier s'applique immédiatement à tous les appareils, sans
+   > relancer de scan : un appareil allumé ou éteint à la main, depuis l'app
+   > Kasa ou par sa propre programmation se met à jour dans Gladys au plus tard
+   > à l'interrogation suivante.
 
 3. Ouvrez l'onglet **Découverte** et cliquez sur **scanner** : vos appareils
    Kasa apparaissent.

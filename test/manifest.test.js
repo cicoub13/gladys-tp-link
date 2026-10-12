@@ -2,8 +2,8 @@
 // The manifest and the code state the same facts twice: the discovery port, the
 // accepted poll frequencies, the default one, and the version. Nothing links
 // them at runtime, and a divergence fails at the worst possible moment — the
-// core rejects an undeclared port, or publishDiscoveredDevices rejects an
-// out-of-set poll_frequency, both silently. These tests are that link.
+// core rejects an undeclared port, or a selected poll_frequency gets silently
+// snapped to another value. These tests are that link.
 // -----------------------------------------------------------------------------
 
 import { test } from 'node:test';
@@ -26,9 +26,9 @@ test('the manifest declares the discovery port the protocol broadcasts on', () =
   assert.ok(activeScan.ports.includes(DISCOVERY_PORT), `port ${DISCOVERY_PORT} must be declared`);
 });
 
-test('the poll_frequency options are exactly the values Gladys core accepts', () => {
-  // Gladys validates poll_frequency in milliseconds against a closed set; an
-  // option outside it would make publishDiscoveredDevices fail silently.
+test('the poll_frequency options are exactly the values the code snaps to', () => {
+  // src/config.js snaps a stored value to this set: an option outside it
+  // would silently poll at another interval than the one the user picked.
   const accepted = [1, 2, 10, 15, 30, 60];
   assert.deepEqual(
     pollFrequencyField.options.map((option) => Number(option.value)),
