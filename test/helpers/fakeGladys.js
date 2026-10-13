@@ -4,13 +4,16 @@
 // Reproduces only the surface the integration relies on:
 //   - externalIds(type, platformId) -> { device, feature(key) }
 //   - scanNetwork(type, options)     -> injected raw scan replies, or throws
-//   - publishState / publishStates   -> recorded for assertions
+//   - publishChangedStates           -> deduplicated like the SDK, recorded
+//   - forgetPublishedStates          -> forgets a remembered value
+//   - publishStates                  -> recorded for assertions
 //   - publishDiscoveredDevices        -> recorded, or throws
 //   - publishTransports               -> recorded for assertions
 //   - getDevices                      -> returns the injected devices
 //   - setConnectionStatus             -> recorded for assertions
-//   - failNext(method, times)         -> the next `times` calls of publishState /
-//                                        publishTransports reject with a 429
+//   - failNext(method, times)         -> the next `times` calls of
+//                                        publishChangedStates / publishTransports
+//                                        reject with a 429
 // -----------------------------------------------------------------------------
 
 export function createFakeGladys({ devices = [], scanReplies = [], scanError, publishError } = {}) {
@@ -21,6 +24,8 @@ export function createFakeGladys({ devices = [], scanReplies = [], scanError, pu
   const transports = [];
   // method name -> how many upcoming calls must still fail.
   const pendingFailures = {};
+  // featureExternalId -> last value accepted through publishChangedStates.
+  const remembered = new Map();
 
   function maybeFail(method) {
     if (pendingFailures[method] > 0) {
@@ -65,10 +70,28 @@ export function createFakeGladys({ devices = [], scanReplies = [], scanError, pu
       };
     },
 
-    async publishState(featureExternalId, state) {
-      maybeFail('publishState');
-      published.push({ featureExternalId, state });
-      return { success: true };
+    // Same contract as the SDK: skips a value equal to the last one accepted,
+    // and forgets the values of a refused request.
+    async publishChangedStates(states) {
+      const changed = states.filter((s) => remembered.get(s.device_feature_external_id) !== s.state);
+      if (changed.length === 0) {
+        return { success: true, count: 0 };
+      }
+      try {
+        maybeFail('publishChangedStates');
+      } catch (err) {
+        changed.forEach((s) => remembered.delete(s.device_feature_external_id));
+        throw err;
+      }
+      for (const s of changed) {
+        remembered.set(s.device_feature_external_id, s.state);
+        published.push({ featureExternalId: s.device_feature_external_id, state: s.state });
+      }
+      return { success: true, count: changed.length };
+    },
+
+    forgetPublishedStates(externalId) {
+      remembered.delete(externalId);
     },
 
     async publishStates(states) {

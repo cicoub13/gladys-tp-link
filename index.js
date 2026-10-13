@@ -20,6 +20,7 @@ import { handleScanRequest } from './src/discovery.js';
 import { handleSetValue } from './src/setValue.js';
 import { handlePoll } from './src/poll.js';
 import { createPoller } from './src/poller.js';
+import { forgetDeviceTransport } from './src/statePublisher.js';
 import { connectAndStayAlive, exitOnUnhandledRejection } from './src/lifecycle.js';
 
 // Installed first, so it also covers the rest of the startup.
@@ -58,6 +59,14 @@ gladys.onSetValue(async (device, feature, value) => {
 // Devices created before the own timer still carry a poll_frequency. Should a
 // Gladys version start polling them, ack instead of answering "not implemented".
 gladys.onPoll(() => {});
+
+// --- Devices created, updated or deleted by the user -------------------------
+// The SDK forgets the states it published for the device, so the next poll
+// sends them again (a re-created device would otherwise stay blank until it
+// changes); forget its transport badge as well.
+gladys.onDeviceCreated(forgetDeviceTransport);
+gladys.onDeviceUpdated(forgetDeviceTransport);
+gladys.onDeviceDeleted(forgetDeviceTransport);
 
 // --- Configuration updated by the user ---------------------------------------
 // Wrapped because onConfigUpdated is unacked too: an error here would leave the

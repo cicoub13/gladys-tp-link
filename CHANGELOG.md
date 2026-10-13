@@ -15,6 +15,8 @@ follows [Semantic Versioning](https://semver.org/) and the
   created device itself, every N seconds as the setting says (every minute by
   default). Changing the interval applies right away to all devices, already
   created ones included: no new scan is needed.
+- **A deleted then re-created device now shows its state right away**, instead
+  of staying blank until the plug or bulb was switched.
 
 ## [1.3.0] - 2026-09-23
 
