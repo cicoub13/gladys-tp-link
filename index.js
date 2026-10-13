@@ -20,6 +20,7 @@ import { handleScanRequest } from './src/discovery.js';
 import { handleSetValue } from './src/setValue.js';
 import { handlePoll } from './src/poll.js';
 import { createPoller } from './src/poller.js';
+import { forgetDeviceTransport } from './src/statePublisher.js';
 import { connectAndStayAlive, exitOnUnhandledRejection } from './src/lifecycle.js';
 
 // Installed first, so it also covers the rest of the startup.
@@ -59,6 +60,14 @@ gladys.onSetValue(async (device, feature, value) => {
 // Gladys version start polling them, ack instead of answering "not implemented".
 gladys.onPoll(() => {});
 
+// --- Devices created, updated or deleted by the user -------------------------
+// The SDK forgets the states it published for the device, so the next poll
+// sends them again (a re-created device would otherwise stay blank until it
+// changes); forget its transport badge as well.
+gladys.onDeviceCreated(forgetDeviceTransport);
+gladys.onDeviceUpdated(forgetDeviceTransport);
+gladys.onDeviceDeleted(forgetDeviceTransport);
+
 // --- Configuration updated by the user ---------------------------------------
 // Wrapped because onConfigUpdated is unacked too: an error here would leave the
 // integration silently running on the previous configuration.
@@ -79,6 +88,10 @@ gladys.onConfigUpdated(async (newConfig) => {
 // re-scanned on connect: a network scan on every reconnection would be wasteful,
 // and the devices the user already created keep working from their stored IP.
 gladys.on('connected', async () => {
+  // Gladys may have missed states while we were away (a device deleted and
+  // re-created meanwhile): the next poll sends every value again. The SDK only
+  // forgets on device events, not on reconnection.
+  gladys.forgetPublishedStates();
   try {
     config = normalizeConfig(await gladys.getConfig());
     await gladys.setConnectionStatus(true);

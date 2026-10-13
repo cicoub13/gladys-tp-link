@@ -6,15 +6,18 @@
 // every trigger. The host API caps states at 300 per minute per integration,
 // sized for state *changes*, not for full snapshots — at one poll per second a
 // handful of devices would blow through it. So both helpers below are no-ops
-// when the value is the same as the one already published.
+// when the value is the same as the one already published: the SDK's
+// publishChangedStates deduplicates the states (and forgets a device's values
+// when the user creates, updates or deletes it), a local cache the transports.
 //
-// The value cache doubles as the guard against the setValue/poll race: a poll
-// that started BEFORE a command must not publish the state it read before the
-// command was applied, or the switch visibly flips back on its own in the UI.
+// On top of that, a guard against the setValue/poll race: a poll that started
+// BEFORE a command must not publish the state it read before the command was
+// applied, or the switch visibly flips back on its own in the UI.
 // -----------------------------------------------------------------------------
 
-// featureExternalId -> { value, at }, `at` being when we published it.
-const lastStates = new Map();
+// featureExternalId -> when a value was last handed to publishChangedStates,
+// published or confirmed unchanged: a read started before it is stale.
+const lastPublishAt = new Map();
 // deviceExternalId -> last published transport.
 const lastTransports = new Map();
 
@@ -30,22 +33,17 @@ const lastTransports = new Map();
  * await publishFeatureState(gladys, feature.external_id, 1, readAt);
  */
 export async function publishFeatureState(gladys, featureExternalId, value, readAt = Date.now()) {
-  const previous = lastStates.get(featureExternalId);
-  if (previous && (previous.value === value || previous.at > readAt)) {
+  if (lastPublishAt.get(featureExternalId) > readAt) {
     return false;
   }
-  // Recorded before the await so a concurrent stale poll is already dropped,
-  // but rolled back if the publish fails: a value Gladys never received must
-  // not be deduplicated away on the next poll.
-  const entry = { value, at: Date.now() };
-  lastStates.set(featureExternalId, entry);
-  try {
-    await gladys.publishState(featureExternalId, value);
-  } catch (err) {
-    rollback(lastStates, featureExternalId, entry, previous);
-    throw err;
-  }
-  return true;
+  // Stamped before the await so a concurrent stale poll is already dropped.
+  // Kept even when the value is unchanged or the publish fails: a read started
+  // before this one is stale either way (the SDK re-sends a refused value).
+  lastPublishAt.set(featureExternalId, Date.now());
+  const { count } = await gladys.publishChangedStates([
+    { device_feature_external_id: featureExternalId, state: value },
+  ]);
+  return count > 0;
 }
 
 /**
@@ -73,9 +71,22 @@ export async function publishDeviceTransport(gladys, deviceExternalId, transport
 }
 
 /**
+ * Forget the transport published for a device, so the next poll publishes it
+ * again. Called when the user creates, updates or deletes the device, like the
+ * SDK does for its states.
+ * @param {object} device - The device from the SDK event.
+ * @returns {void}
+ * @example
+ * gladys.onDeviceCreated(forgetDeviceTransport);
+ */
+export function forgetDeviceTransport(device) {
+  lastTransports.delete(device.external_id);
+}
+
+/**
  * Undo a cache entry after a failed publish, unless a later publish already
  * replaced it.
- * @param {Map} cache - lastStates or lastTransports.
+ * @param {Map} cache - lastTransports.
  * @param {string} key - The external id.
  * @param {unknown} entry - The entry the failed publish recorded.
  * @param {unknown} previous - The entry before it (undefined when none).
@@ -101,6 +112,6 @@ function rollback(cache, key, entry, previous) {
  * resetPublishedState();
  */
 export function resetPublishedState() {
-  lastStates.clear();
+  lastPublishAt.clear();
   lastTransports.clear();
 }

@@ -4,7 +4,7 @@ import { createPoller } from '../src/poller.js';
 import { handlePoll } from '../src/poll.js';
 import { buildDevice } from '../src/tplink/model.js';
 import { resetPublishedState } from '../src/statePublisher.js';
-import { createFakeGladys } from './helpers/fakeGladys.js';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { createFakeTpLink, PLUG_SYSINFO, BULB_SYSINFO } from './helpers/fakeTpLink.js';
 
 // setImmediate is not mocked (only setInterval is): it runs once every pending
@@ -44,7 +44,7 @@ test('the poller refreshes every created device right away, then at each interva
 
   await poller.start(30);
   assert.deepEqual(
-    gladys.published.map((p) => [p.featureExternalId, p.state]),
+    gladys.fake.states.map((s) => [s.device_feature_external_id, s.state]),
     [
       [plug.features[0].external_id, 1],
       [bulb.features[0].external_id, 0],
@@ -55,11 +55,11 @@ test('the poller refreshes every created device right away, then at each interva
   byHost['192.168.1.10'] = { ...PLUG_SYSINFO, relay_state: 0 };
   t.mock.timers.tick(29_999);
   await flush();
-  assert.equal(gladys.published.length, 2);
+  assert.equal(gladys.fake.states.length, 2);
 
   t.mock.timers.tick(1);
   await flush();
-  assert.deepEqual(gladys.published.at(-1), { featureExternalId: plug.features[0].external_id, state: 0 });
+  assert.deepEqual(gladys.fake.states.at(-1), { device_feature_external_id: plug.features[0].external_id, state: 0 });
   poller.stop();
 });
 

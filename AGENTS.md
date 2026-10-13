@@ -12,8 +12,8 @@ Project-specific notes. Generic rules live in `CLAUDE.md`, the file map and user
   `assertExpectedDevice` → publish transport `local`, then publish the ON/OFF state through `src/statePublisher.js`.
 - **Command**: `src/setValue.js` → `tpClient.setPowerState(host, on, { expectedDeviceId: serial })` → publish the
   state **read back** from the device. If the read-back is `null` or unreadable, publish the requested value.
-- The code never uses the SDK `publishStates` batch, only `publishState` and `publishTransports`.
-- There is no persistence: nothing is written under `/data`. The dedup caches in `statePublisher.js` live only in memory.
+- States go through the SDK `publishChangedStates` (one state per call), transports through `publishTransports`.
+- There is no persistence: nothing is written under `/data`. The caches in `statePublisher.js` live only in memory.
 
 ## Kasa protocol (legacy LAN, not KLAP)
 
@@ -57,12 +57,15 @@ Project-specific notes. Generic rules live in `CLAUDE.md`, the file map and user
   purpose set `err.userFacing = true` and are kept verbatim.
 - DHCP safety: before every read or command, `assertExpectedDevice` checks that the serial matches, so a reassigned IP
   cannot act on the wrong device. The fix is to rescan, which upserts the IP param.
-- `statePublisher.js` deduplicates by value because Gladys stores history, fires triggers and applies a 300/min
-  limit on every publish. It also drops a poll read (`readAt`) that is older than the last publish, so a poll that
-  started before a command cannot flip the UI back. The cache entry is written before the `await` and rolled back
-  if the publish fails (commit 023fcd0).
+- States are deduplicated by value because Gladys stores history, fires triggers and applies a 300/min limit on
+  every publish. `publishChangedStates` does it, re-sends a value Gladys refused, and forgets a device's values when
+  the user creates, updates or deletes it (Gladys drops states of a feature that does not exist yet).
+  `statePublisher.js` also drops a poll read (`readAt`) older than the last value handed to it for that feature
+  (published or confirmed unchanged), so a poll that started before a command cannot flip the UI back. That stamp is
+  written before the `await` and kept even if the publish fails.
 - A failed read or command publishes transport `unreachable`, and the next success publishes `local`. Both are
-  deduplicated.
+  deduplicated by a local cache, rolled back if the publish fails (commit 023fcd0) and cleared for a device the user
+  creates, updates or deletes (`index.js` handlers).
 - `src/lifecycle.js`: when the first `connect()` fails, the code only logs it and does not exit, because the SDK
   keeps retrying (b50f494). An unhandled rejection logs its reason and then exits with code 1 (fb054a0).
 - `Number(value)` coercion in `setValue.js` is deliberate: a string `'1'` must not mean OFF.
@@ -70,8 +73,10 @@ Project-specific notes. Generic rules live in `CLAUDE.md`, the file map and user
 
 ## Tests
 
-- `test/helpers/fakeGladys.js` fakes the SDK surface. Its `externalIds` returns `ext:test:…`; `failNext(method, n)`
-  makes the next n `publishState`/`publishTransports` calls fail with 429.
+- Tests use the SDK's `createFakeGladys` (`@gladysassistant/integration-sdk/testing`): ids are
+  `ext:test-integration:…`, scan replies go in `scanResults: { 'udp-active-broadcast': [...] }`, and what Gladys
+  received is in `gladys.fake.states` / `transports` / `scans` / `connectionStatuses` (JSON bodies). A failure is
+  a `t.mock.method(gladys, 'publishStates' | 'publishTransports' | 'scanNetwork' …)` throwing a `GladysApiError`.
 - `test/helpers/fakeTpLink.js` fakes the client wrapper and provides the `PLUG_/BULB_/UNKNOWN_/POWER_STRIP_SYSINFO`
   fixtures. `discoveryReply(ip, sysInfo)` builds a really encrypted scan reply, so the codec is exercised for real.
 - `test/client.test.js` injects a fake driver with a fake clock (`now`) to check round-trip counts and the time
