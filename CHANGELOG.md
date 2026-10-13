@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-13
+
 ### Fixed
 
 - **Device states are now refreshed at the configured interval.** Gladys never
@@ -127,7 +129,8 @@ follows [Semantic Versioning](https://semver.org/) and the
 - **The refresh interval is now a fixed set of choices** (1, 2, 10, 15, 30 or
   60 seconds) instead of a free number field.
 
-[Unreleased]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.1...v1.2.2
