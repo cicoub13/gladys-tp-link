@@ -1,12 +1,12 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEVICE_FEATURE_CATEGORIES } from '@gladysassistant/integration-sdk';
+import { DEVICE_FEATURE_CATEGORIES, GladysApiError } from '@gladysassistant/integration-sdk';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { handleSetValue } from '../src/setValue.js';
 import { handlePoll } from '../src/poll.js';
 import { buildDevice } from '../src/tplink/model.js';
 import { PARAMS, TRANSPORTS } from '../src/constants.js';
 import { resetPublishedState } from '../src/statePublisher.js';
-import { createFakeGladys } from './helpers/fakeGladys.js';
 import { createFakeTpLink, PLUG_SYSINFO, BULB_SYSINFO } from './helpers/fakeTpLink.js';
 
 function buildPlug(gladys, host = '192.168.1.10') {
@@ -28,7 +28,7 @@ test('handleSetValue turns a plug ON and publishes the state read back', async (
   await handleSetValue(gladys, tpClient, { device, feature, value: 1 });
 
   assert.deepEqual(tpClient.powerCommands, [{ host: '192.168.1.10', on: true }]);
-  assert.deepEqual(gladys.published, [{ featureExternalId: feature.external_id, state: 1 }]);
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: feature.external_id, state: 1 }]);
 });
 
 test('handleSetValue turns a plug OFF', async () => {
@@ -40,7 +40,7 @@ test('handleSetValue turns a plug OFF', async () => {
   await handleSetValue(gladys, tpClient, { device, feature, value: 0 });
 
   assert.deepEqual(tpClient.powerCommands, [{ host: '192.168.1.10', on: false }]);
-  assert.equal(gladys.published[0].state, 0);
+  assert.equal(gladys.fake.states[0].state, 0);
 });
 
 test('handleSetValue accepts a value handed back as a string', async () => {
@@ -79,7 +79,7 @@ test('handleSetValue rejects a feature category it does not manage', async () =>
 test('handleSetValue resolves the IP from getDevices() when the event device is lightweight', async () => {
   const gladys = createFakeGladys();
   const full = buildPlug(gladys, '192.168.1.55');
-  gladys.devices = [full];
+  gladys.fake.devices = [full];
   const tpClient = createFakeTpLink({ byHost: { '192.168.1.55': { ...PLUG_SYSINFO, relay_state: 0 } } });
 
   const lightweight = { external_id: full.external_id };
@@ -102,7 +102,7 @@ test('handleSetValue refuses to command an address now held by another device', 
     /Another device now answers/,
   );
   assert.equal(tpClient.powerCommands.length, 0);
-  assert.equal(gladys.published.length, 0);
+  assert.equal(gladys.fake.states.length, 0);
 });
 
 test('handleSetValue replaces the raw driver error and flags the device unreachable', async () => {
@@ -118,21 +118,25 @@ test('handleSetValue replaces the raw driver error and flags the device unreacha
       return true;
     },
   );
-  assert.deepEqual(gladys.transports, [{ external_id: device.external_id, transport: TRANSPORTS.UNREACHABLE }]);
+  assert.deepEqual(gladys.fake.transports, [
+    { device_external_id: device.external_id, transport: TRANSPORTS.UNREACHABLE },
+  ]);
 });
 
-test('handleSetValue still publishes the state when the transport badge cannot be published', async () => {
+test('handleSetValue still publishes the state when the transport badge cannot be published', async (t) => {
   // The command reached the device: a failed badge update must neither hide
   // the new state nor report the command as failed.
   const gladys = createFakeGladys();
   const tpClient = createFakeTpLink({ byHost: { '192.168.1.10': { ...PLUG_SYSINFO, relay_state: 0 } } });
   const device = buildPlug(gladys);
   const feature = device.features[0];
-  gladys.failNext('publishTransports');
+  t.mock.method(gladys, 'publishTransports', async () => {
+    throw new GladysApiError(429, 'TOO_MANY_REQUESTS', 'RATE_LIMIT_EXCEEDED');
+  });
 
   await handleSetValue(gladys, tpClient, { device, feature, value: 1 });
 
-  assert.deepEqual(gladys.published, [{ featureExternalId: feature.external_id, state: 1 }]);
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: feature.external_id, state: 1 }]);
 });
 
 test('handleSetValue publishes the requested state when the device state could not be read back', async () => {
@@ -145,7 +149,7 @@ test('handleSetValue publishes the requested state when the device state could n
 
   await handleSetValue(gladys, tpClient, { device, feature, value: 1 });
 
-  assert.deepEqual(gladys.published, [{ featureExternalId: feature.external_id, state: 1 }]);
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: feature.external_id, state: 1 }]);
 });
 
 test('handleSetValue reports a device with no stored address', async () => {
@@ -169,10 +173,8 @@ test('handlePoll publishes the plug relay_state to its ON/OFF feature', async ()
 
   await handlePoll(gladys, tpClient, device);
 
-  assert.equal(gladys.published.length, 1);
-  assert.equal(gladys.published[0].featureExternalId, device.features[0].external_id);
-  assert.equal(gladys.published[0].state, 1);
-  assert.deepEqual(gladys.transports, [{ external_id: device.external_id, transport: TRANSPORTS.LOCAL }]);
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: device.features[0].external_id, state: 1 }]);
+  assert.deepEqual(gladys.fake.transports, [{ device_external_id: device.external_id, transport: TRANSPORTS.LOCAL }]);
 });
 
 test('handlePoll publishes the bulb light_state.on_off', async () => {
@@ -182,8 +184,7 @@ test('handlePoll publishes the bulb light_state.on_off', async () => {
 
   await handlePoll(gladys, tpClient, device);
 
-  assert.equal(gladys.published[0].featureExternalId, device.features[0].external_id);
-  assert.equal(gladys.published[0].state, 1);
+  assert.equal(gladys.fake.lastState(device.features[0].external_id), 1);
 });
 
 test('handlePoll does not re-publish an unchanged state', async () => {
@@ -198,8 +199,8 @@ test('handlePoll does not re-publish an unchanged state', async () => {
   await handlePoll(gladys, tpClient, device);
   await handlePoll(gladys, tpClient, device);
 
-  assert.equal(gladys.published.length, 1);
-  assert.equal(gladys.transports.length, 1); // the transport is deduplicated too
+  assert.equal(gladys.fake.states.length, 1);
+  assert.equal(gladys.fake.transports.length, 1); // the transport is deduplicated too
 });
 
 test('handlePoll publishes again once the state actually changes', async () => {
@@ -213,8 +214,27 @@ test('handlePoll publishes again once the state actually changes', async () => {
   await handlePoll(gladys, tpClient, device);
 
   assert.deepEqual(
-    gladys.published.map((p) => p.state),
+    gladys.fake.states.map((s) => s.state),
     [1, 0],
+  );
+});
+
+test('handlePoll publishes the state of a deleted then re-created device right away', async () => {
+  // Gladys drops the states of a feature that does not exist: without
+  // forgetting what was published, the re-created plug would stay blank
+  // until it is switched.
+  const gladys = createFakeGladys();
+  const tpClient = createFakeTpLink({ byHost: { '192.168.1.10': { ...PLUG_SYSINFO, relay_state: 1 } } });
+  const device = buildPlug(gladys);
+
+  await handlePoll(gladys, tpClient, device);
+  await gladys.fake.deviceDeleted(device);
+  await gladys.fake.deviceCreated(device);
+  await handlePoll(gladys, tpClient, device);
+
+  assert.deepEqual(
+    gladys.fake.states.map((s) => s.state),
+    [1, 1],
   );
 });
 
@@ -226,7 +246,7 @@ test('handlePoll refuses to publish the state of another device answering at the
   });
 
   await assert.rejects(() => handlePoll(gladys, tpClient, device), /Another device now answers/);
-  assert.equal(gladys.published.length, 0);
+  assert.equal(gladys.fake.states.length, 0);
 });
 
 test('handlePoll flags an unreachable device and hides the raw driver error', async () => {
@@ -242,19 +262,21 @@ test('handlePoll flags an unreachable device and hides the raw driver error', as
       return true;
     },
   );
-  assert.deepEqual(gladys.transports, [{ external_id: device.external_id, transport: TRANSPORTS.UNREACHABLE }]);
+  assert.deepEqual(gladys.fake.transports, [
+    { device_external_id: device.external_id, transport: TRANSPORTS.UNREACHABLE },
+  ]);
 });
 
 test('handlePoll publishes nothing when the device carries no ON/OFF feature', async () => {
   const gladys = createFakeGladys();
   const device = buildPlug(gladys);
   device.features = [];
-  gladys.devices = [device];
+  gladys.fake.devices = [device];
   const tpClient = createFakeTpLink({ byHost: { '192.168.1.10': PLUG_SYSINFO } });
 
   await handlePoll(gladys, tpClient, device);
 
-  assert.equal(gladys.published.length, 0);
+  assert.equal(gladys.fake.states.length, 0);
 });
 
 test('handlePoll publishes nothing when the state cannot be read from the sysinfo', async () => {
@@ -267,6 +289,6 @@ test('handlePoll publishes nothing when the state cannot be read from the sysinf
 
   await handlePoll(gladys, tpClient, device);
 
-  assert.equal(gladys.published.length, 0);
-  assert.deepEqual(gladys.transports, [{ external_id: device.external_id, transport: TRANSPORTS.LOCAL }]);
+  assert.equal(gladys.fake.states.length, 0);
+  assert.deepEqual(gladys.fake.transports, [{ device_external_id: device.external_id, transport: TRANSPORTS.LOCAL }]);
 });

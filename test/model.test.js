@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DEVICE_FEATURE_CATEGORIES, DEVICE_FEATURE_TYPES } from '@gladysassistant/integration-sdk';
 import { classify, buildDevice, readOnOff, assertExpectedDevice } from '../src/tplink/model.js';
 import { DEVICE_KINDS, PARAMS, FEATURE_KEYS } from '../src/constants.js';
-import { createFakeGladys } from './helpers/fakeGladys.js';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { PLUG_SYSINFO, BULB_SYSINFO, UNKNOWN_SYSINFO, POWER_STRIP_SYSINFO } from './helpers/fakeTpLink.js';
 
 const gladys = createFakeGladys();
@@ -47,7 +47,7 @@ test('buildDevice(plug) produces a SWITCH/binary controllable feature', () => {
   const { kind, device } = buildDevice(gladys, PLUG_SYSINFO, '192.168.1.10');
   assert.equal(kind, DEVICE_KINDS.PLUG);
   assert.equal(device.name, 'Office plug');
-  assert.equal(device.external_id, `ext:test:plug:${PLUG_SYSINFO.deviceId}`);
+  assert.equal(device.external_id, `ext:test-integration:plug:${PLUG_SYSINFO.deviceId}`);
   // The integration polls on its own timer (src/poller.js): the payload asks
   // Gladys for no polling at all.
   assert.equal(device.poll_frequency, undefined);

@@ -73,8 +73,10 @@ Project-specific notes. Generic rules live in `CLAUDE.md`, the file map and user
 
 ## Tests
 
-- `test/helpers/fakeGladys.js` fakes the SDK surface. Its `externalIds` returns `ext:test:…`; `failNext(method, n)`
-  makes the next n `publishChangedStates`/`publishTransports` calls fail with 429.
+- Tests use the SDK's `createFakeGladys` (`@gladysassistant/integration-sdk/testing`): ids are
+  `ext:test-integration:…`, scan replies go in `scanResults: { 'udp-active-broadcast': [...] }`, and what Gladys
+  received is in `gladys.fake.states` / `transports` / `scans` / `connectionStatuses` (JSON bodies). A failure is
+  a `t.mock.method(gladys, 'publishStates' | 'publishTransports' | 'scanNetwork' …)` throwing a `GladysApiError`.
 - `test/helpers/fakeTpLink.js` fakes the client wrapper and provides the `PLUG_/BULB_/UNKNOWN_/POWER_STRIP_SYSINFO`
   fixtures. `discoveryReply(ip, sysInfo)` builds a really encrypted scan reply, so the codec is exercised for real.
 - `test/client.test.js` injects a fake driver with a fake clock (`now`) to check round-trip counts and the time
