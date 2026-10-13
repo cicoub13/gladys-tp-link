@@ -88,6 +88,10 @@ gladys.onConfigUpdated(async (newConfig) => {
 // re-scanned on connect: a network scan on every reconnection would be wasteful,
 // and the devices the user already created keep working from their stored IP.
 gladys.on('connected', async () => {
+  // Gladys may have missed states while we were away (a device deleted and
+  // re-created meanwhile): the next poll sends every value again. The SDK only
+  // forgets on device events, not on reconnection.
+  gladys.forgetPublishedStates();
   try {
     config = normalizeConfig(await gladys.getConfig());
     await gladys.setConnectionStatus(true);
