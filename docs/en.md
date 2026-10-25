@@ -1,10 +1,12 @@
 # TP-Link Kasa
 
+## Overview
+
 Control your **TP-Link Kasa** smart plugs, switches and bulbs from Gladys, over
 your local network. The integration runs in its own container and talks to your
 devices using the classic Kasa LAN protocol.
 
-## Supported devices
+### Supported devices
 
 | Device             | Feature           |
 | ------------------ | ----------------- |
@@ -23,7 +25,7 @@ they are not published because they have no controllable feature yet.
 > protocol. Newer Kasa firmware that only exposes the encrypted KLAP protocol is
 > not supported.
 
-## How discovery works
+### How discovery works
 
 Kasa devices only answer an **active discovery probe**, and the integration runs
 in a sandboxed container that cannot broadcast onto your LAN. So the scan is
@@ -35,6 +37,20 @@ it afterwards.
 
 Give your Kasa devices a **DHCP reservation** on your router so their IP address
 stays stable; if it changes, a new scan picks up the new address automatically.
+
+## Prerequisites
+
+- **Gladys 4.86 or later.**
+- **TP-Link Kasa plugs, switches or bulbs** that speak the classic Kasa LAN
+  protocol (see _Supported devices_ above). Firmware that only
+  exposes the encrypted KLAP protocol is not supported.
+- **The devices and Gladys on the same local network/subnet.** Gladys
+  broadcasts the discovery probe on UDP port 9999, then the integration
+  controls each device directly at its IP address, on port 9999 as well.
+- **No TP-Link cloud account and no Internet access**: everything stays on your
+  local network.
+- Recommended: a **DHCP reservation** for each device on your router, so its IP
+  address stays stable.
 
 ## Configuration
 
@@ -63,6 +79,11 @@ Run a scan again anytime you add a new device.
 - **"Nothing happens" when I click scan.** Gladys allows one scan every 10
   seconds: wait a moment before scanning again. The error is shown in the
   integration banner.
+- **"This Gladys version refused the network scan".** Gladys refused the
+  network scan the integration asked for. Check that the integration is up to
+  date, then scan again.
+- **"Device scan failed, check the integration logs".** The scan failed for
+  another reason: the integration logs give the cause.
 - **A device is flagged "unreachable".** It is off, unplugged, or its IP address
   changed. Check it is powered on, then run a new scan to pick up its new
   address.
@@ -71,5 +92,6 @@ Run a scan again anytime you add a new device.
   deliberately refuses to control a device whose identity it could not verify,
   rather than acting on the wrong one.
 - **Need more detail?** The integration logs everything it does. Check the
-  integration logs from the Gladys UI (or `docker logs` on the host) with
+  integration logs from the Gladys UI (the **Logs** of the integration, on its
+  page), or `docker logs` on the host, with
   `LOG_LEVEL=debug` for the full detail.
