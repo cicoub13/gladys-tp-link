@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-28
+
 ### Changed
 
 - **Requires Gladys 4.86 or later.** The integration now declares its catalog
@@ -134,7 +136,8 @@ follows [Semantic Versioning](https://semver.org/) and the
 - **The refresh interval is now a fixed set of choices** (1, 2, 10, 15, 30 or
   60 seconds) instead of a free number field.
 
-[Unreleased]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/cicoub13/gladys-tp-link/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/cicoub13/gladys-tp-link/compare/v1.2.2...v1.2.3
