@@ -1,10 +1,12 @@
 # TP-Link Kasa
 
+## Présentation
+
 Contrôlez vos prises, interrupteurs et ampoules connectés **TP-Link Kasa** depuis
 Gladys, sur votre réseau local. L'intégration s'exécute dans son propre conteneur
 et communique avec vos appareils via le protocole LAN Kasa classique.
 
-## Appareils pris en charge
+### Appareils pris en charge
 
 | Appareil                | Fonctionnalité          |
 | ----------------------- | ----------------------- |
@@ -24,7 +26,7 @@ mais ne sont pas publiés car ils n'ont pas encore de fonctionnalité contrôlab
 > protocole LAN Kasa classique. Les firmwares Kasa récents qui n'exposent que le
 > protocole chiffré KLAP ne sont pas pris en charge.
 
-## Comment fonctionne la découverte
+### Comment fonctionne la découverte
 
 Les appareils Kasa ne répondent qu'à une **sonde de découverte active**, et
 l'intégration s'exécute dans un conteneur isolé qui ne peut pas diffuser sur
@@ -37,6 +39,22 @@ IP depuis laquelle chacun a répondu est mémorisée pour le piloter ensuite.
 Attribuez à vos appareils Kasa une **réservation DHCP** sur votre routeur afin
 que leur adresse IP reste stable ; si elle change, un nouveau scan récupère
 automatiquement la nouvelle adresse.
+
+## Prérequis
+
+- **Gladys 4.86 ou plus récent.**
+- **Des prises, interrupteurs ou ampoules TP-Link Kasa** qui utilisent le
+  protocole LAN Kasa classique (voir
+  _Appareils pris en charge_ ci-dessus). Les firmwares qui
+  n'exposent que le protocole chiffré KLAP ne sont pas pris en charge.
+- **Les appareils et Gladys sur le même réseau local/sous-réseau.** Gladys
+  diffuse la sonde de découverte sur le port UDP 9999, puis l'intégration
+  pilote chaque appareil directement à son adresse IP, sur le port 9999
+  également.
+- **Ni compte cloud TP-Link ni accès à Internet** : tout reste sur votre réseau
+  local.
+- Recommandé : une **réservation DHCP** pour chaque appareil sur votre routeur,
+  afin que son adresse IP reste stable.
 
 ## Configuration
 
@@ -68,6 +86,12 @@ Relancez un scan à tout moment lorsque vous ajoutez un nouvel appareil.
 - **« Rien ne se passe » quand je clique sur scanner.** Gladys n'autorise qu'un
   scan toutes les 10 secondes : patientez un instant avant de relancer. Le
   message d'erreur s'affiche dans le bandeau de l'intégration.
+- **« Cette version de Gladys a refusé le scan réseau ».** Gladys a refusé le
+  scan réseau demandé par l'intégration. Vérifiez que l'intégration est à jour,
+  puis relancez un scan.
+- **« Le scan des appareils a échoué, consultez les logs de l'intégration ».**
+  Le scan a échoué pour une autre raison : les logs de l'intégration en donnent
+  la cause.
 - **Un appareil est marqué « injoignable ».** Il est éteint, débranché, ou son
   adresse IP a changé. Vérifiez qu'il est alimenté, puis relancez un scan pour
   récupérer sa nouvelle adresse.
@@ -76,5 +100,6 @@ Relancez un scan à tout moment lorsque vous ajoutez un nouvel appareil.
   refuse volontairement de piloter un appareil dont elle n'a pas pu vérifier
   l'identité, plutôt que d'agir sur le mauvais.
 - **Besoin de plus de détails ?** L'intégration journalise tout ce qu'elle fait.
-  Consultez les logs de l'intégration depuis l'interface Gladys (ou `docker logs`
-  sur l'hôte) avec `LOG_LEVEL=debug` pour le détail complet.
+  Consultez les logs de l'intégration depuis l'interface Gladys (les
+  **Journaux** de l'intégration, sur sa page), ou `docker logs` sur l'hôte,
+  avec `LOG_LEVEL=debug` pour le détail complet.

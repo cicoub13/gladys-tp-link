@@ -6,6 +6,11 @@ follows [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+### Changed
+
+- **Requires Gladys 4.86 or later.** The integration now declares its catalog
+  category (Lighting) itself, a field older Gladys releases do not accept.
+
 ## [1.3.1] - 2026-10-13
 
 ### Fixed
