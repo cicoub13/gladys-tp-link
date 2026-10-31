@@ -76,6 +76,12 @@ Run a scan again anytime you add a new device.
   Kasa devices answer (see below).
 - **A device appears but never changes state.** Its firmware may only speak the
   newer KLAP protocol, which is not supported.
+- **A device disappeared from the scan after a firmware update.** Some Kasa
+  models switch to the KLAP protocol when their firmware is updated. The
+  **EP10P4** plug is one of them: firmware **1.1.1** (installed from version
+  **1.0.5**) moves it to KLAP, and it can then no longer be discovered. Do not
+  install that firmware if you plan to use the device with Gladys; with
+  firmware 1.0.5, everything works.
 - **"Nothing happens" when I click scan.** Gladys allows one scan every 10
   seconds: wait a moment before scanning again. The error is shown in the
   integration banner.
