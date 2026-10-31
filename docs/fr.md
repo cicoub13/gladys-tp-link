@@ -83,6 +83,12 @@ Relancez un scan à tout moment lorsque vous ajoutez un nouvel appareil.
   appareils Kasa au protocole classique répondent (voir ci-dessous).
 - **Un appareil apparaît mais ne change jamais d'état.** Son firmware ne parle
   peut-être que le protocole KLAP récent, non pris en charge.
+- **Un appareil a disparu du scan après une mise à jour de son firmware.**
+  Certains modèles Kasa passent au protocole KLAP quand on met leur firmware à
+  jour. C'est notamment le cas de la prise **EP10P4** : le firmware **1.1.1**
+  (installé depuis la version **1.0.5**) la fait passer en KLAP, et elle n'est
+  alors plus détectable. Ne mettez pas à jour ce firmware si vous comptez
+  utiliser l'appareil avec Gladys ; avec le firmware 1.0.5, tout fonctionne.
 - **« Rien ne se passe » quand je clique sur scanner.** Gladys n'autorise qu'un
   scan toutes les 10 secondes : patientez un instant avant de relancer. Le
   message d'erreur s'affiche dans le bandeau de l'intégration.

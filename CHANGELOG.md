@@ -6,6 +6,14 @@ follows [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+### Documentation
+
+- **Some Kasa plugs disappear from the scan after a firmware update.** The
+  documentation now names a concrete case — the **EP10P4**, whose firmware
+  **1.1.1** (installed from version **1.0.5**) switches it to the unsupported
+  KLAP protocol — and explains that the firmware should not be updated if the
+  device is to keep working with Gladys.
+
 ## [1.3.2] - 2026-10-28
 
 ### Changed

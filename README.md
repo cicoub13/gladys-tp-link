@@ -43,6 +43,11 @@ work — see `classify()` in `src/tplink/model.js`.
 > **Local-only, legacy protocol.** Like the core service, this integration speaks
 > the classic Kasa LAN protocol. Newer Kasa firmware that only exposes the
 > encrypted KLAP protocol is not supported by `tplink-smarthome-api`.
+>
+> A firmware update can move a device to KLAP and make it vanish from the scan:
+> the **EP10P4** plug, updated to firmware **1.1.1** (from **1.0.5**), is a known
+> case. Do not install that firmware if you want to keep using the device with
+> Gladys.
 
 ## How discovery works (important)
 
