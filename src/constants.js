@@ -16,9 +16,10 @@ export const DEVICE_KINDS = {
   // Multi-outlet strips (HS300, HS107, KP303, KP400): announced as
   // IOT.SMARTPLUGSWITCH like a single plug, but their state lives in
   // `sysinfo.children[]` and a command without a childId switches every outlet
-  // at once. Detected on purpose so they are skipped with a clear message
-  // instead of being published as a plug that cannot work.
+  // at once. The strip itself is never published: each outlet is (see OUTLET).
   POWER_STRIP: 'power-strip',
+  // One outlet of a strip, published as its own device.
+  OUTLET: 'outlet',
   UNKNOWN: 'device',
 };
 
@@ -33,6 +34,8 @@ export const PARAMS = {
   IP_ADDRESS: 'TP_LINK_IP_ADDRESS',
   SERIAL_NUMBER: 'TP_LINK_SERIAL_NUMBER',
   MODEL: 'TP_LINK_MODEL',
+  // Full id of a strip outlet, as the strip reports it in `children[]`.
+  CHILD_ID: 'TP_LINK_CHILD_ID',
 };
 
 // TP-Link `sysinfo.type` (or legacy `mic_type`) values, mapped to a kind.

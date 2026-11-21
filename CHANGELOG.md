@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-outlet power strips (HS300, HS107, KP303, KP400).** A scan now lists
+  each outlet of a strip as its own device, named after the outlet in the Kasa
+  app. Each outlet is switched on and off on its own and shows its own state.
+
 ## [1.3.3] - 2026-10-31
 
 ### Documentation

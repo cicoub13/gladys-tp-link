@@ -8,12 +8,13 @@
 // the encrypted request, the core (host network) broadcasts it and relays the
 // raw unicast replies, and we decode them here. Each reply carries the device's
 // source IP, which rides along as a param so later commands/polls reach it by
-// unicast. Nothing is created here: the user picks which discovered devices to
-// add, from the Gladys "Discovery" tab.
+// unicast. A multi-outlet strip yields one device per outlet. Nothing is created
+// here: the user picks which discovered devices to add, from the Gladys
+// "Discovery" tab.
 // -----------------------------------------------------------------------------
 
 import { createLogger } from '@gladysassistant/integration-sdk';
-import { buildDevice } from './tplink/model.js';
+import { buildDevice, buildOutletDevices } from './tplink/model.js';
 import { buildDiscoveryRequest, parseDiscoveryReply, DISCOVERY_PORT } from './tplink/protocol.js';
 import { DEVICE_KINDS } from './constants.js';
 
@@ -60,9 +61,7 @@ export async function scan(gladys) {
   for (const { sysInfo, host } of responders.values()) {
     const { kind, device } = buildDevice(gladys, sysInfo, host);
     if (kind === DEVICE_KINDS.POWER_STRIP) {
-      logger.warn(
-        `Skipping "${sysInfo.alias}" (model ${sysInfo.model}): multi-outlet TP-Link strips are not supported yet`,
-      );
+      devices.push(...buildOutletDevices(gladys, sysInfo, host));
       continue;
     }
     if (kind === DEVICE_KINDS.UNKNOWN || !device) {

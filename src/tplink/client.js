@@ -4,8 +4,10 @@
 // needs and hides the library object, so the rest of the code — and the unit
 // tests — depend on this small, mockable surface instead of the driver.
 //
-//   - getSysInfo(host)        : unicast read of a device system info
-//   - setPowerState(host, on) : unicast ON/OFF command
+//   - getSysInfo(host)        : unicast read of a device system info, shared
+//                               by the callers asking while it is in flight
+//   - setPowerState(host, on) : unicast ON/OFF command, on one strip outlet
+//                               when given a childId
 // -----------------------------------------------------------------------------
 
 // tplink-smarthome-api is a CommonJS module: import the default and destructure
@@ -38,6 +40,10 @@ export function createClient({
   client = new Client({ defaultSendOptions: { timeout: SEND_TIMEOUT_MS } }),
   now = Date.now,
 } = {}) {
+  // host -> the read in flight. The outlets of a strip are polled side by
+  // side: sharing the read makes it one request per strip, not one per outlet.
+  const inFlightReads = new Map();
+
   return {
     /** The underlying driver, exposed for advanced use / debugging. */
     raw: client,
@@ -48,8 +54,12 @@ export function createClient({
      * @param {string} host - The device IP address.
      * @returns {Promise<object>} The TP-Link `sysinfo` object.
      */
-    async getSysInfo(host) {
-      return client.getSysInfo(host);
+    getSysInfo(host) {
+      if (!inFlightReads.has(host)) {
+        const read = (async () => client.getSysInfo(host))().finally(() => inFlightReads.delete(host));
+        inFlightReads.set(host, read);
+      }
+      return inFlightReads.get(host);
     },
 
     /**
@@ -60,11 +70,13 @@ export function createClient({
      * @param {boolean} on - True to turn on, false to turn off.
      * @param {object} [options] - Command options.
      * @param {string} [options.expectedDeviceId] - Serial the host must match.
+     * @param {string} [options.childId] - The strip outlet to switch. Without
+     *   it a strip switches every outlet.
      * @returns {Promise<object|null>} The `sysinfo` read back after the
      *   command, or null when it could not be read back (the command itself
      *   was applied).
      */
-    async setPowerState(host, on, { expectedDeviceId } = {}) {
+    async setPowerState(host, on, { expectedDeviceId, childId } = {}) {
       const deadline = now() + COMMAND_BUDGET_MS;
       // Send options for the next round-trip: whatever is left of the budget.
       const nextSendOptions = () => {
@@ -78,8 +90,9 @@ export function createClient({
       const sysInfo = await client.getSysInfo(host, undefined, nextSendOptions());
       assertExpectedDevice(sysInfo, expectedDeviceId, host);
       // Handing the sysinfo over lets the driver pick its device class without
-      // another round-trip.
-      const device = await client.getDevice({ host, sysInfo });
+      // another round-trip. With a childId, the driver adds
+      // `context.child_ids` to the frame so only that outlet switches.
+      const device = await client.getDevice({ host, sysInfo, childId });
       await device.setPowerState(Boolean(on), nextSendOptions());
       // Read back rather than trusting the command: a device can ack a frame
       // without actually switching (jammed relay), and an optimistic publish

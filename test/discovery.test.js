@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GladysApiError } from '@gladysassistant/integration-sdk';
+import { DEVICE_FEATURE_CATEGORIES, DEVICE_FEATURE_TYPES, GladysApiError } from '@gladysassistant/integration-sdk';
 import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { scan, handleScanRequest } from '../src/discovery.js';
 import {
@@ -91,15 +91,67 @@ test('scan keeps the last address of a device answering from two interfaces', as
   assert.equal(devices[0].params.find((p) => p.name === 'TP_LINK_IP_ADDRESS')?.value, '10.0.0.10');
 });
 
-test('scan skips a multi-outlet strip instead of publishing it as a plug', async () => {
+test('a scan publishes one switch device per strip outlet, next to unchanged plugs and bulbs', async (t) => {
+  const warnings = [];
+  t.mock.method(console, 'error', (...args) => warnings.push(args.join(' ')));
   const gladys = withReplies([
     discoveryReply('192.168.1.10', PLUG_SYSINFO),
+    discoveryReply('192.168.1.11', BULB_SYSINFO),
     discoveryReply('192.168.1.13', POWER_STRIP_SYSINFO),
   ]);
+  const singles = withReplies([
+    discoveryReply('192.168.1.10', PLUG_SYSINFO),
+    discoveryReply('192.168.1.11', BULB_SYSINFO),
+  ]);
 
-  const devices = await scan(gladys);
-  assert.equal(devices.length, 1);
-  assert.equal(devices[0].external_id, `ext:test-integration:plug:${PLUG_SYSINFO.deviceId}`);
+  await handleScanRequest(gladys);
+  await handleScanRequest(singles);
+
+  const published = gladys.fake.discoveredDevices;
+  const outlets = published.filter((d) => d.external_id.includes(':outlet:'));
+  // FR-001: one device per outlet.
+  assert.deepEqual(
+    outlets.map((d) => d.external_id),
+    [
+      'ext:test-integration:outlet:STRIP00100',
+      'ext:test-integration:outlet:STRIP00101',
+      'ext:test-integration:outlet:STRIP00102',
+    ],
+  );
+  // FR-004: the outlet name, else the strip name and the outlet position.
+  assert.deepEqual(
+    outlets.map((d) => d.name),
+    ['Lamp', 'TV', 'Desk strip – Outlet 3'],
+  );
+  // FR-002: exactly one On/Off switch each.
+  for (const outlet of outlets) {
+    assert.equal(outlet.features.length, 1);
+    assert.equal(outlet.features[0].category, DEVICE_FEATURE_CATEGORIES.SWITCH);
+    assert.equal(outlet.features[0].type, DEVICE_FEATURE_TYPES.SWITCH.BINARY);
+    assert.equal(outlet.features[0].read_only, false);
+  }
+  // FR-010: the plug and the bulb are published exactly as without the strip.
+  assert.deepEqual(
+    published.filter((d) => !d.external_id.includes(':outlet:')),
+    singles.fake.discoveredDevices,
+  );
+  // FR-011: no "not supported" line any more.
+  assert.ok(!warnings.some((w) => /not supported/.test(w)), warnings.join('\n'));
+});
+
+test('a rescan finds the same outlets again, even at a new address', async () => {
+  // FR-003: the outlet identity is the strip serial and the outlet id, not the
+  // address, so the devices users created are recognised.
+  const first = withReplies([discoveryReply('192.168.1.13', POWER_STRIP_SYSINFO)]);
+  const second = withReplies([discoveryReply('192.168.1.77', POWER_STRIP_SYSINFO)]);
+
+  await handleScanRequest(first);
+  await handleScanRequest(second);
+
+  const ids = (gladys) => gladys.fake.discoveredDevices.map((d) => d.external_id);
+  assert.deepEqual(ids(second), ids(first));
+  const address = second.fake.discoveredDevices[0].params.find((p) => p.name === 'TP_LINK_IP_ADDRESS').value;
+  assert.equal(address, '192.168.1.77');
 });
 
 // --- handleScanRequest: the reporting wrapper -------------------------------
