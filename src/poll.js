@@ -4,7 +4,9 @@
 //
 // Read the current sysinfo by unicast, check the address is still held by the
 // device we expect, extract the ON/OFF state depending on the device kind (plug
-// -> relay_state, bulb -> light_state.on_off) and publish it if it changed.
+// -> relay_state, bulb -> light_state.on_off, outlet -> its entry in the strip
+// `children[]`) and publish it if it changed. The outlets of a strip are polled
+// side by side and share one read (src/tplink/client.js).
 //
 // Publishing an unchanged value is NOT free: Gladys writes a history row,
 // broadcasts a websocket event and re-evaluates every trigger on each state it
@@ -12,10 +14,10 @@
 // -----------------------------------------------------------------------------
 
 import { createLogger } from '@gladysassistant/integration-sdk';
-import { resolveTarget, findOnOffFeature } from './deviceLookup.js';
+import { resolveTarget, findOnOffFeature, getParam } from './deviceLookup.js';
 import { classify, readOnOff, assertExpectedDevice } from './tplink/model.js';
 import { publishFeatureState, publishDeviceTransport } from './statePublisher.js';
-import { TRANSPORTS } from './constants.js';
+import { TRANSPORTS, PARAMS, DEVICE_KINDS } from './constants.js';
 import { toUserFacingError } from './errors.js';
 
 const logger = createLogger({ name: 'tp-link-poll' });
@@ -56,7 +58,8 @@ export async function handlePoll(gladys, tpClient, device) {
 
   await publishDeviceTransport(gladys, full.external_id, TRANSPORTS.LOCAL);
 
-  const state = readOnOff(classify(sysInfo), sysInfo);
+  const childId = getParam(full, PARAMS.CHILD_ID);
+  const state = readOnOff(childId ? DEVICE_KINDS.OUTLET : classify(sysInfo), sysInfo, childId);
   if (typeof state !== 'number') {
     logger.warn(`Poll: no readable ON/OFF state for ${device.external_id} (model ${sysInfo.model})`);
     return;

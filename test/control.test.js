@@ -4,10 +4,10 @@ import { DEVICE_FEATURE_CATEGORIES, GladysApiError } from '@gladysassistant/inte
 import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { handleSetValue } from '../src/setValue.js';
 import { handlePoll } from '../src/poll.js';
-import { buildDevice } from '../src/tplink/model.js';
+import { buildDevice, buildOutletDevices } from '../src/tplink/model.js';
 import { PARAMS, TRANSPORTS } from '../src/constants.js';
 import { resetPublishedState } from '../src/statePublisher.js';
-import { createFakeTpLink, PLUG_SYSINFO, BULB_SYSINFO } from './helpers/fakeTpLink.js';
+import { createFakeTpLink, PLUG_SYSINFO, BULB_SYSINFO, POWER_STRIP_SYSINFO } from './helpers/fakeTpLink.js';
 
 function buildPlug(gladys, host = '192.168.1.10') {
   return buildDevice(gladys, PLUG_SYSINFO, host).device;
@@ -162,6 +162,110 @@ test('handleSetValue reports a device with no stored address', async () => {
     () => handleSetValue(gladys, tpClient, { device, feature: device.features[0], value: 1 }),
     /No address stored/,
   );
+});
+
+// --- setValue on a strip outlet ---------------------------------------------
+
+const STRIP_HOST = '192.168.1.13';
+const allOn = () => ({
+  ...POWER_STRIP_SYSINFO,
+  children: POWER_STRIP_SYSINFO.children.map((c) => ({ ...c, state: 1 })),
+});
+
+test('turning one outlet off leaves the other outlets of the strip on', async () => {
+  // FR-005, SC-002.
+  const gladys = createFakeGladys();
+  const byHost = { [STRIP_HOST]: allOn() };
+  const tpClient = createFakeTpLink({ byHost });
+  const outlets = buildOutletDevices(gladys, POWER_STRIP_SYSINFO, STRIP_HOST);
+  const tv = outlets[1];
+
+  await handleSetValue(gladys, tpClient, { device: tv, feature: tv.features[0], value: 0 });
+
+  assert.deepEqual(tpClient.powerCommands, [{ host: STRIP_HOST, on: false, childId: 'STRIP00101' }]);
+  assert.deepEqual(
+    byHost[STRIP_HOST].children.map((c) => c.state),
+    [1, 0, 1],
+  );
+  // FR-007: the state published is the one read back for that outlet only.
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: tv.features[0].external_id, state: 0 }]);
+});
+
+test('two outlet commands in a row each land on their own outlet', async () => {
+  const gladys = createFakeGladys();
+  const byHost = { [STRIP_HOST]: allOn() };
+  const tpClient = createFakeTpLink({ byHost });
+  const [lamp, tv] = buildOutletDevices(gladys, POWER_STRIP_SYSINFO, STRIP_HOST);
+
+  await Promise.all([
+    handleSetValue(gladys, tpClient, { device: lamp, feature: lamp.features[0], value: 0 }),
+    handleSetValue(gladys, tpClient, { device: tv, feature: tv.features[0], value: 0 }),
+  ]);
+
+  assert.deepEqual(
+    byHost[STRIP_HOST].children.map((c) => c.state),
+    [0, 0, 1],
+  );
+});
+
+test('an outlet command publishes the requested state when the read-back is missing', async () => {
+  // FR-007: the command went through but the read-back failed or timed out.
+  const gladys = createFakeGladys();
+  const [lamp] = buildOutletDevices(gladys, POWER_STRIP_SYSINFO, STRIP_HOST);
+  const calls = [];
+  const tpClient = {
+    setPowerState: async (...args) => {
+      calls.push(args);
+      return null;
+    },
+  };
+
+  await handleSetValue(gladys, tpClient, { device: lamp, feature: lamp.features[0], value: 0 });
+
+  assert.deepEqual(calls, [[STRIP_HOST, false, { expectedDeviceId: 'STRIP001', childId: 'STRIP00100' }]]);
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: lamp.features[0].external_id, state: 0 }]);
+});
+
+test('an outlet command publishes the requested state when the strip no longer reports the outlet', async () => {
+  const gladys = createFakeGladys();
+  const [lamp] = buildOutletDevices(gladys, POWER_STRIP_SYSINFO, STRIP_HOST);
+  const tpClient = { setPowerState: async () => ({ ...POWER_STRIP_SYSINFO, children: [] }) };
+
+  await handleSetValue(gladys, tpClient, { device: lamp, feature: lamp.features[0], value: 1 });
+
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: lamp.features[0].external_id, state: 1 }]);
+});
+
+test('an outlet command sends nothing when another device answers at the strip address', async () => {
+  // FR-006.
+  const gladys = createFakeGladys();
+  const [lamp] = buildOutletDevices(gladys, POWER_STRIP_SYSINFO, STRIP_HOST);
+  const tpClient = createFakeTpLink({ byHost: { [STRIP_HOST]: { ...POWER_STRIP_SYSINFO, deviceId: 'SOMEONE_ELSE' } } });
+
+  await assert.rejects(
+    () => handleSetValue(gladys, tpClient, { device: lamp, feature: lamp.features[0], value: 0 }),
+    /Another device now answers at 192\.168\.1\.13: run a new scan/,
+  );
+  assert.equal(tpClient.powerCommands.length, 0);
+  assert.equal(gladys.fake.states.length, 0);
+});
+
+test('an outlet command on an unreachable strip fails readably and flags the outlet unreachable', async () => {
+  const gladys = createFakeGladys();
+  const [lamp] = buildOutletDevices(gladys, POWER_STRIP_SYSINFO, STRIP_HOST);
+  const tpClient = createFakeTpLink({ byHost: {} });
+
+  await assert.rejects(
+    () => handleSetValue(gladys, tpClient, { device: lamp, feature: lamp.features[0], value: 0 }),
+    (err) => {
+      assert.match(err.message, /unreachable at 192\.168\.1\.13/);
+      assert.doesNotMatch(err.message, /TCP Timeout/);
+      return true;
+    },
+  );
+  assert.deepEqual(gladys.fake.transports, [
+    { device_external_id: lamp.external_id, transport: TRANSPORTS.UNREACHABLE },
+  ]);
 });
 
 // --- poll -------------------------------------------------------------------

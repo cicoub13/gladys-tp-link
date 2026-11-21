@@ -4,7 +4,8 @@
 // Direct port of the core models (server/services/tp-link/lib/models):
 //   - IOT.SMARTPLUGSWITCH / IOT.RANGEEXTENDER.SMARTPLUG -> plug  (SWITCH/binary)
 //   - IOT.SMARTBULB                                     -> bulb  (LIGHT/binary)
-//   - a `children[]` strip                              -> unsupported (skipped)
+//   - a `children[]` strip                              -> one outlet (SWITCH/binary)
+//                                                          per child, see buildOutletDevices
 //   - anything else                                     -> unsupported (skipped)
 //
 // The external ids are built with the SDK so they are namespaced with the
@@ -38,14 +39,38 @@ export function classify(sysInfo) {
 }
 
 /**
+ * Expand an outlet id to the full form, the way the driver does: some strips
+ * report only the outlet index ('1' or '01'), others the strip serial plus it.
+ * @param {string} deviceId - The strip serial.
+ * @param {string} id - The outlet id as reported in `children[]`.
+ * @returns {string} The full outlet id.
+ * @example
+ * normalizeChildId('STRIP001', '01'); // 'STRIP00101'
+ */
+export function normalizeChildId(deviceId, id) {
+  if (id.length === 1) {
+    return `${deviceId}0${id}`;
+  }
+  if (id.length === 2) {
+    return `${deviceId}${id}`;
+  }
+  return id;
+}
+
+/**
  * Read the ON/OFF state out of a sysinfo, given the device kind.
  * @param {string} kind - One of DEVICE_KINDS.
  * @param {object} sysInfo - The TP-Link `sysinfo` object.
- * @returns {number|undefined} 1 / 0, or undefined for an unsupported kind.
+ * @param {string} [childId] - The full outlet id, for an outlet.
+ * @returns {number|undefined} 1 / 0, or undefined for an unsupported kind or
+ *   an outlet the strip no longer reports.
  * @example
  * readOnOff(DEVICE_KINDS.PLUG, { relay_state: 1 }); // 1
  */
-export function readOnOff(kind, sysInfo) {
+export function readOnOff(kind, sysInfo, childId) {
+  if (kind === DEVICE_KINDS.OUTLET) {
+    return sysInfo.children?.find((child) => normalizeChildId(sysInfo.deviceId, child.id) === childId)?.state;
+  }
   if (kind === DEVICE_KINDS.PLUG) {
     return sysInfo.relay_state;
   }
@@ -138,4 +163,46 @@ export function buildDevice(gladys, sysInfo, host) {
 
   // Unsupported device type: no controllable feature, so nothing to publish.
   return { kind, device: null };
+}
+
+/**
+ * Build one Gladys discovery payload per outlet of a strip.
+ * @param {object} gladys - The GladysIntegration SDK instance.
+ * @param {object} sysInfo - The strip `sysinfo` object, with `children[]`.
+ * @param {string} host - The strip IP address.
+ * @returns {object[]} One payload per outlet.
+ * @example
+ * buildOutletDevices(gladys, stripSysInfo, '192.168.1.13');
+ */
+export function buildOutletDevices(gladys, sysInfo, host) {
+  const stripAlias = sysInfo.alias || sysInfo.dev_name || `TP-Link ${sysInfo.deviceId}`;
+  return sysInfo.children.map((child, index) => {
+    const childId = normalizeChildId(sysInfo.deviceId, child.id);
+    const ids = gladys.externalIds(DEVICE_KINDS.OUTLET, childId);
+    const name = child.alias || `${stripAlias} – Outlet ${index + 1}`;
+    return {
+      name,
+      external_id: ids.device,
+      // Polled by the integration's own timer, like a plug (see buildDevice).
+      params: [
+        { name: PARAMS.IP_ADDRESS, value: host },
+        { name: PARAMS.SERIAL_NUMBER, value: sysInfo.deviceId },
+        { name: PARAMS.MODEL, value: sysInfo.model || '' },
+        { name: PARAMS.CHILD_ID, value: childId },
+      ],
+      features: [
+        {
+          name: `${name} On/Off`,
+          external_id: ids.feature(FEATURE_KEYS.ON_OFF),
+          category: DEVICE_FEATURE_CATEGORIES.SWITCH,
+          type: DEVICE_FEATURE_TYPES.SWITCH.BINARY,
+          min: 0,
+          max: 1,
+          read_only: false,
+          has_feedback: true,
+          keep_history: true,
+        },
+      ],
+    };
+  });
 }

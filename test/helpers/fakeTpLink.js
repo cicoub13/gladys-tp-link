@@ -1,8 +1,10 @@
 // -----------------------------------------------------------------------------
 // Minimal in-memory stand-in for the TP-Link client wrapper (src/tplink/client.js).
 //
-//   - getSysInfo(host)       -> returns the sysinfo mapped to that host, or throws
-//   - setPowerState(host,on) -> records the command
+//   - getSysInfo(host)       -> returns the sysinfo mapped to that host, or throws;
+//                               counted per host in `sysInfoReads`
+//   - setPowerState(host,on) -> records the command; with a `childId`, switches
+//                               only that outlet of a strip, and keeps it
 //
 // Also provides discoveryReply(): a real encrypted `udp-active-broadcast` scan
 // result for a sysinfo, so discovery tests exercise the actual codec.
@@ -27,6 +29,7 @@ export function discoveryReply(sourceIp, sysInfo) {
 
 export function createFakeTpLink({ byHost = {} } = {}) {
   const powerCommands = [];
+  const sysInfoReads = {};
 
   function read(host) {
     const sysInfo = byHost[host];
@@ -40,14 +43,26 @@ export function createFakeTpLink({ byHost = {} } = {}) {
 
   return {
     powerCommands,
+    sysInfoReads,
 
     async getSysInfo(host) {
+      sysInfoReads[host] = (sysInfoReads[host] || 0) + 1;
       return read(host);
     },
 
-    async setPowerState(host, on, { expectedDeviceId } = {}) {
+    async setPowerState(host, on, { expectedDeviceId, childId } = {}) {
       const sysInfo = read(host);
       assertExpectedDevice(sysInfo, expectedDeviceId, host);
+      if (childId) {
+        powerCommands.push({ host, on, childId });
+        // Like the relay of a real strip: only the targeted outlet changes, and
+        // it stays changed for the next read.
+        byHost[host] = {
+          ...sysInfo,
+          children: sysInfo.children.map((child) => (child.id === childId ? { ...child, state: on ? 1 : 0 } : child)),
+        };
+        return byHost[host];
+      }
       powerCommands.push({ host, on });
       // The real wrapper reads the state back after commanding it.
       return sysInfo.light_state
@@ -82,14 +97,15 @@ export const UNKNOWN_SYSINFO = {
 };
 
 // Multi-outlet strip: announced as a plug type, but its state lives in
-// `children[]` — must be detected and skipped, not published as a plug.
+// `children[]`, one entry per outlet. The third outlet has no name set.
 export const POWER_STRIP_SYSINFO = {
   deviceId: 'STRIP001',
   alias: 'Desk strip',
   model: 'HS300(US)',
   type: 'IOT.SMARTPLUGSWITCH',
   children: [
-    { id: 'STRIP00100', alias: 'Outlet 1', state: 1 },
-    { id: 'STRIP00101', alias: 'Outlet 2', state: 0 },
+    { id: 'STRIP00100', alias: 'Lamp', state: 1 },
+    { id: 'STRIP00101', alias: 'TV', state: 0 },
+    { id: 'STRIP00102', alias: '', state: 1 },
   ],
 };
