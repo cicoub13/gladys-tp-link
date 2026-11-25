@@ -11,16 +11,18 @@ et communique avec vos appareils via le protocole LAN Kasa classique.
 | Appareil                | Fonctionnalité          |
 | ----------------------- | ----------------------- |
 | Prises et interrupteurs | Marche/Arrêt (`switch`) |
+| Prises de multiprises   | Marche/Arrêt (`switch`) |
 | Ampoules                | Marche/Arrêt (`light`)  |
 
 Les autres types TP-Link sont détectés lors d'un scan et signalés dans les logs,
 mais ne sont pas publiés car ils n'ont pas encore de fonctionnalité contrôlable.
 
-> **Multiprises non prises en charge.** Les barrettes Kasa à plusieurs prises
-> (HS300, HS107, KP303, KP400) sont détectées et volontairement ignorées : leurs
-> prises se pilotent individuellement, ce que cette intégration ne sait pas
-> encore faire. Les publier reviendrait à proposer un seul interrupteur qui
-> éteindrait toute la barrette d'un coup.
+> **Multiprises.** Chaque prise d'une barrette Kasa (HS300, HS107, KP303,
+> KP400) est découverte comme un appareil à part, nommé comme la prise dans
+> l'application Kasa (ou « <nom de la barrette> – Outlet <n> » si elle n'a pas
+> de nom). Chacune s'allume et s'éteint seule, sans toucher aux autres prises.
+> Seul Marche/Arrêt est pris en charge : la mesure de consommation par prise du
+> HS300 ne l'est pas.
 
 > **Local uniquement, protocole historique.** Cette intégration utilise le
 > protocole LAN Kasa classique. Les firmwares Kasa récents qui n'exposent que le

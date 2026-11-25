@@ -2,10 +2,12 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPoller } from '../src/poller.js';
 import { handlePoll } from '../src/poll.js';
-import { buildDevice } from '../src/tplink/model.js';
+import { buildDevice, buildOutletDevices } from '../src/tplink/model.js';
+import { createClient } from '../src/tplink/client.js';
+import { TRANSPORTS } from '../src/constants.js';
 import { resetPublishedState } from '../src/statePublisher.js';
 import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { createFakeTpLink, PLUG_SYSINFO, BULB_SYSINFO } from './helpers/fakeTpLink.js';
+import { createFakeTpLink, PLUG_SYSINFO, BULB_SYSINFO, POWER_STRIP_SYSINFO } from './helpers/fakeTpLink.js';
 
 // setImmediate is not mocked (only setInterval is): it runs once every pending
 // promise callback has, so a poll run that only awaits fakes has settled.
@@ -187,4 +189,94 @@ test('stop leaves no timer running', async (t) => {
 
   assert.equal(polled.length, 1);
   poller.stop(); // idempotent
+});
+
+// --- strip outlets ----------------------------------------------------------
+// The real client wrapper around the fake strip: the shared read under test
+// lives in the wrapper, and the fake counts the requests that reach the strip.
+
+const STRIP_HOST = '192.168.1.13';
+
+function stripPoller(devices, byHost) {
+  const gladys = createFakeGladys();
+  const strip = createFakeTpLink({ byHost });
+  const tpClient = createClient({ client: strip });
+  const poller = createPoller({
+    listDevices: () => devices,
+    pollDevice: (device) => handlePoll(gladys, tpClient, device),
+  });
+  return { gladys, strip, poller };
+}
+
+const stateOf = (gladys, device) => gladys.fake.lastState(device.features[0].external_id);
+
+test('each refresh reads a strip once and publishes each created outlet on its own', async (t) => {
+  // FR-008, SC-003, SC-004.
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const outlets = buildOutletDevices(createFakeGladys(), POWER_STRIP_SYSINFO, STRIP_HOST);
+  const byHost = { [STRIP_HOST]: POWER_STRIP_SYSINFO };
+  const { gladys, strip, poller } = stripPoller(outlets, byHost);
+
+  await poller.start(10);
+  assert.equal(strip.sysInfoReads[STRIP_HOST], 1);
+  assert.deepEqual(
+    outlets.map((o) => stateOf(gladys, o)),
+    [1, 0, 1],
+  );
+
+  // Outlet 3 is switched off from the Kasa app.
+  byHost[STRIP_HOST] = {
+    ...POWER_STRIP_SYSINFO,
+    children: POWER_STRIP_SYSINFO.children.map((c, i) => (i === 2 ? { ...c, state: 0 } : c)),
+  };
+  const published = gladys.fake.states.length;
+  t.mock.timers.tick(10_000);
+  await flush();
+
+  assert.equal(strip.sysInfoReads[STRIP_HOST], 2);
+  assert.deepEqual(gladys.fake.states.slice(published), [
+    { device_feature_external_id: outlets[2].features[0].external_id, state: 0 },
+  ]);
+  poller.stop();
+});
+
+test('only the created outlets of a strip are published', async () => {
+  const [, tv] = buildOutletDevices(createFakeGladys(), POWER_STRIP_SYSINFO, STRIP_HOST);
+  const { gladys, poller } = stripPoller([tv], { [STRIP_HOST]: POWER_STRIP_SYSINFO });
+
+  await poller.start(10);
+  poller.stop();
+
+  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: tv.features[0].external_id, state: 0 }]);
+});
+
+test('an outlet the strip no longer reports publishes nothing and breaks nothing', async () => {
+  const [lamp, tv] = buildOutletDevices(createFakeGladys(), POWER_STRIP_SYSINFO, STRIP_HOST);
+  const without = { ...POWER_STRIP_SYSINFO, children: POWER_STRIP_SYSINFO.children.slice(1) };
+  const { gladys, poller } = stripPoller([lamp, tv], { [STRIP_HOST]: without });
+
+  await poller.start(10);
+  poller.stop();
+
+  assert.equal(stateOf(gladys, lamp), undefined);
+  assert.equal(stateOf(gladys, tv), 0);
+});
+
+test('a strip that stops answering flags every outlet unreachable, then reachable again', async (t) => {
+  // FR-009.
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const outlets = buildOutletDevices(createFakeGladys(), POWER_STRIP_SYSINFO, STRIP_HOST);
+  const byHost = {};
+  const { gladys, poller } = stripPoller(outlets, byHost);
+  const transportOf = (o) =>
+    gladys.fake.transports.findLast((tr) => tr.device_external_id === o.external_id)?.transport;
+
+  await poller.start(10);
+  assert.deepEqual(outlets.map(transportOf), [TRANSPORTS.UNREACHABLE, TRANSPORTS.UNREACHABLE, TRANSPORTS.UNREACHABLE]);
+
+  byHost[STRIP_HOST] = POWER_STRIP_SYSINFO;
+  t.mock.timers.tick(10_000);
+  await flush();
+  assert.deepEqual(outlets.map(transportOf), [TRANSPORTS.LOCAL, TRANSPORTS.LOCAL, TRANSPORTS.LOCAL]);
+  poller.stop();
 });

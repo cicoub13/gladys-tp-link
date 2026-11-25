@@ -11,15 +11,17 @@ devices using the classic Kasa LAN protocol.
 | Device             | Feature           |
 | ------------------ | ----------------- |
 | Plugs and switches | On/Off (`switch`) |
+| Strip outlets      | On/Off (`switch`) |
 | Bulbs              | On/Off (`light`)  |
 
 Other TP-Link types are detected during a scan and reported in the logs, but
 they are not published because they have no controllable feature yet.
 
-> **Multi-outlet strips are not supported.** Kasa power strips (HS300, HS107,
-> KP303, KP400) are detected and deliberately skipped: their outlets are
-> controlled individually, which this integration cannot do yet. Publishing them
-> would offer a single switch that turns the whole strip off at once.
+> **Multi-outlet strips.** Each outlet of a Kasa power strip (HS300, HS107,
+> KP303, KP400) is discovered as its own device, named after the outlet in the
+> Kasa app (or "<strip name> – Outlet <n>" when it has no name). Each one is
+> switched on and off on its own, without touching the other outlets. Only
+> On/Off is supported: the per-outlet energy metering of the HS300 is not.
 
 > **Local-only, legacy protocol.** This integration speaks the classic Kasa LAN
 > protocol. Newer Kasa firmware that only exposes the encrypted KLAP protocol is

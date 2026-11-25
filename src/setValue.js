@@ -2,18 +2,20 @@
 // Handle a user command on a device feature — port of the core
 // `smart-device.setValue.js`.
 //
-// Only the binary ON/OFF of a plug (switch) or a bulb (light) is controllable,
-// exactly like the core. The command is sent by unicast to the device IP, after
-// checking that address is still held by the expected device; the state that is
-// then published is the one read back from the device, not the one we asked
-// for, so a frame acked but not applied cannot show a state Gladys never saw.
+// Only the binary ON/OFF of a plug or a strip outlet (switch) or a bulb (light)
+// is controllable, exactly like the core. An outlet command carries the outlet
+// id, so the other outlets of the strip are left as they are. The command is
+// sent by unicast to the device IP, after checking that address is still held
+// by the expected device; the state that is then published is the one read
+// back from the device, not the one we asked for, so a frame acked but not
+// applied cannot show a state Gladys never saw.
 // -----------------------------------------------------------------------------
 
 import { createLogger, DEVICE_FEATURE_CATEGORIES } from '@gladysassistant/integration-sdk';
-import { resolveTarget } from './deviceLookup.js';
+import { resolveTarget, getParam } from './deviceLookup.js';
 import { classify, readOnOff } from './tplink/model.js';
 import { publishFeatureState, publishDeviceTransport } from './statePublisher.js';
-import { ON, OFF, TRANSPORTS } from './constants.js';
+import { ON, OFF, TRANSPORTS, PARAMS, DEVICE_KINDS } from './constants.js';
 import { toUserFacingError } from './errors.js';
 
 const logger = createLogger({ name: 'tp-link-set-value' });
@@ -63,15 +65,19 @@ export async function handleSetValue(gladys, tpClient, { device, feature, value 
 
   const on = readRequestedPower(value);
   const { full, host, serial } = await resolveTarget(gladys, device);
+  const childId = getParam(full, PARAMS.CHILD_ID);
   logger.info(`Setting ${device.external_id} -> ${on ? 'ON' : 'OFF'} (${host})`);
 
   let sysInfo;
   try {
-    sysInfo = await tpClient.setPowerState(host, on, { expectedDeviceId: serial });
+    sysInfo = await tpClient.setPowerState(host, on, { expectedDeviceId: serial, childId });
   } catch (err) {
     logger.error(`Command on ${device.external_id} failed at ${host}`, err);
-    await publishDeviceTransport(gladys, full.external_id, TRANSPORTS.UNREACHABLE).catch((reportErr) => {
-      logger.error('Could not publish the unreachable transport', reportErr);
+    // The strip answered but no longer reports this outlet: it is reachable,
+    // a new scan is what is needed (the poll path publishes LOCAL too).
+    const transport = err.deviceReachable ? TRANSPORTS.LOCAL : TRANSPORTS.UNREACHABLE;
+    await publishDeviceTransport(gladys, full.external_id, transport).catch((reportErr) => {
+      logger.error(`Could not publish the ${transport} transport`, reportErr);
     });
     throw toUserFacingError(err, `TP-Link device unreachable at ${host}: check it is powered on and on your network`);
   }
@@ -85,6 +91,6 @@ export async function handleSetValue(gladys, tpClient, { device, feature, value 
   // Publish what the device reports, falling back to the requested value if the
   // read-back is unusable or missing (null: it failed or ran out of time) — the
   // command did succeed, the UI must reflect it.
-  const readBack = sysInfo ? readOnOff(classify(sysInfo), sysInfo) : undefined;
+  const readBack = sysInfo ? readOnOff(childId ? DEVICE_KINDS.OUTLET : classify(sysInfo), sysInfo, childId) : undefined;
   await publishFeatureState(gladys, feature.external_id, typeof readBack === 'number' ? readBack : Number(on));
 }

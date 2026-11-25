@@ -26,19 +26,23 @@ _Captured on a Gladys 5.1 dashboard with simulated devices and states — values
 
 ## Supported devices
 
-| TP-Link type (`sysinfo.type`)                        | Gladys device | Feature           |
-| ---------------------------------------------------- | ------------- | ----------------- |
-| `IOT.SMARTPLUGSWITCH`, `IOT.RANGEEXTENDER.SMARTPLUG` | Plug / switch | On/Off (`switch`) |
-| `IOT.SMARTBULB`                                      | Bulb          | On/Off (`light`)  |
+| TP-Link type (`sysinfo.type`)                        | Gladys device  | Feature           |
+| ---------------------------------------------------- | -------------- | ----------------- |
+| `IOT.SMARTPLUGSWITCH`, `IOT.RANGEEXTENDER.SMARTPLUG` | Plug / switch  | On/Off (`switch`) |
+| `IOT.SMARTPLUGSWITCH` with `children[]` (strip)      | One per outlet | On/Off (`switch`) |
+| `IOT.SMARTBULB`                                      | Bulb           | On/Off (`light`)  |
 
 Other TP-Link types are detected during a scan and reported in the logs, but not
 published (no controllable feature). This matches what the core service handles.
 
 Multi-outlet strips (HS300, HS107, KP303, KP400) announce themselves as
-`IOT.SMARTPLUGSWITCH` but carry their state in `sysinfo.children[]`, and a
-command without a `childId` switches every outlet at once. They are detected and
-skipped with an explicit log line rather than published as a plug that cannot
-work — see `classify()` in `src/tplink/model.js`.
+`IOT.SMARTPLUGSWITCH` but carry their state in `sysinfo.children[]`. Each outlet
+becomes its own device (`ext:<selector>:outlet:<childId>`), with the strip
+address, serial and the outlet `TP_LINK_CHILD_ID` as params. Every command on an
+outlet carries its `childId`, so only that outlet switches (a command without
+one would switch every outlet at once). A refresh reads each strip once for all
+its outlets. Only On/Off: per-outlet energy metering is not exposed. See
+`buildOutletDevices()` in `src/tplink/model.js`.
 
 > **Local-only, legacy protocol.** Like the core service, this integration speaks
 > the classic Kasa LAN protocol. Newer Kasa firmware that only exposes the

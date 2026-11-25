@@ -4,7 +4,7 @@ import net from 'node:net';
 import tplinkSmarthomeApi from 'tplink-smarthome-api';
 import { encryptWithHeader, decrypt } from 'tplink-smarthome-crypto';
 import { createClient } from '../src/tplink/client.js';
-import { PLUG_SYSINFO } from './helpers/fakeTpLink.js';
+import { PLUG_SYSINFO, POWER_STRIP_SYSINFO } from './helpers/fakeTpLink.js';
 
 // Stand-in for a `tplink-smarthome-api` Client: the wrapper takes one through
 // its `{ client }` injection hook, so the driver itself is never touched.
@@ -33,17 +33,19 @@ function createFakeDriver({ sysInfo = PLUG_SYSINFO, failOnGetSysInfo, latencyMs 
       }
       return current;
     },
-    async getDevice({ host, sysInfo: known }, sendOptions) {
+    async getDevice({ host, sysInfo: known, childId }, sendOptions) {
       if (!known) {
         send('get_sysinfo', host, sendOptions);
       }
       return {
+        childId,
         async getSysInfo(options) {
           send('get_sysinfo', host, options);
           return current;
         },
         async setPowerState(on, options) {
           send('set_power', host, options);
+          sends.at(-1).childId = childId;
           current = { ...current, relay_state: on ? 1 : 0 };
         },
       };
@@ -154,6 +156,55 @@ test('setPowerState commands when the serial matches', async () => {
   assert.ok(driver.sends.some((s) => s.op === 'set_power'));
 });
 
+test('setPowerState hands the outlet id to the driver device', async () => {
+  const driver = createFakeDriver({ sysInfo: POWER_STRIP_SYSINFO });
+  const tpClient = createClient({ client: driver });
+
+  await tpClient.setPowerState('192.168.1.13', false, { childId: 'STRIP00101' });
+
+  assert.equal(driver.sends.find((s) => s.op === 'set_power').childId, 'STRIP00101');
+});
+
+test('setPowerState matches an outlet the strip reports by its short id', async () => {
+  const driver = createFakeDriver({
+    sysInfo: { ...POWER_STRIP_SYSINFO, children: [{ id: '01', alias: 'TV', state: 0 }] },
+  });
+  const tpClient = createClient({ client: driver });
+
+  await tpClient.setPowerState('192.168.1.13', true, { childId: 'STRIP00101' });
+
+  assert.ok(driver.sends.some((s) => s.op === 'set_power'));
+});
+
+test('getSysInfo shares one request between callers while it is in flight', async () => {
+  const driver = createFakeDriver();
+  const tpClient = createClient({ client: driver });
+
+  const [a, b] = await Promise.all([tpClient.getSysInfo('192.168.1.13'), tpClient.getSysInfo('192.168.1.13')]);
+
+  assert.equal(a, b);
+  assert.equal(driver.sends.length, 1);
+
+  // Settled: the next caller gets a fresh read.
+  await tpClient.getSysInfo('192.168.1.13');
+  assert.equal(driver.sends.length, 2);
+});
+
+test('getSysInfo rejects every caller sharing a failed request, then retries', async () => {
+  const driver = createFakeDriver({ failOnGetSysInfo: new Error('TCP Timeout after 2000ms') });
+  const tpClient = createClient({ client: driver });
+
+  const results = await Promise.allSettled([tpClient.getSysInfo('192.168.1.13'), tpClient.getSysInfo('192.168.1.13')]);
+
+  assert.deepEqual(
+    results.map((r) => r.status),
+    ['rejected', 'rejected'],
+  );
+  assert.equal(driver.sends.length, 1);
+  await assert.rejects(() => tpClient.getSysInfo('192.168.1.13'));
+  assert.equal(driver.sends.length, 2);
+});
+
 // --- Against the real driver ------------------------------------------------
 // The fake above encodes what each driver call costs; this checks that model
 // against the real `tplink-smarthome-api`, talking to a fake Kasa device over
@@ -170,8 +221,8 @@ const FULL_PLUG_SYSINFO = {
   err_code: 0,
 };
 
-async function startFakeKasaDevice() {
-  const state = { sysInfo: { ...FULL_PLUG_SYSINFO }, connections: 0 };
+async function startFakeKasaDevice(sysInfo = FULL_PLUG_SYSINFO) {
+  const state = { sysInfo: structuredClone(sysInfo), connections: 0, requests: [] };
   const server = net.createServer((socket) => {
     state.connections += 1;
     let buffer = Buffer.alloc(0);
@@ -181,6 +232,7 @@ async function startFakeKasaDevice() {
         return;
       }
       const request = JSON.parse(decrypt(buffer.subarray(4)).toString());
+      state.requests.push(request);
       let response;
       if (request.system?.set_relay_state) {
         state.sysInfo.relay_state = request.system.set_relay_state.state;
@@ -216,6 +268,55 @@ test('with the real driver, a poll costs one round-trip and a command three', as
     const sysInfo = await tpClient.setPowerState('127.0.0.1', true, { expectedDeviceId: PLUG_SYSINFO.deviceId });
     assert.equal(device.state.connections, 3);
     assert.equal(sysInfo.relay_state, 1);
+  } finally {
+    await device.close();
+  }
+});
+
+test('with the real driver, an outlet command carries only that outlet id', async () => {
+  const device = await startFakeKasaDevice({
+    ...FULL_PLUG_SYSINFO,
+    deviceId: 'STRIP001',
+    model: 'HS300(US)',
+    children: [
+      { id: 'STRIP00100', alias: 'Lamp', state: 1 },
+      { id: 'STRIP00101', alias: 'TV', state: 1 },
+    ],
+  });
+  try {
+    const tpClient = createClient({ client: realDriverOnPort(device.port) });
+
+    await tpClient.setPowerState('127.0.0.1', false, { expectedDeviceId: 'STRIP001', childId: 'STRIP00101' });
+
+    const command = device.state.requests.find((r) => r.system?.set_relay_state);
+    assert.deepEqual(command, { context: { child_ids: ['STRIP00101'] }, system: { set_relay_state: { state: 0 } } });
+  } finally {
+    await device.close();
+  }
+});
+
+test('with the real driver, a command on an outlet the strip no longer reports sends nothing and asks for a new scan', async () => {
+  const device = await startFakeKasaDevice({
+    ...FULL_PLUG_SYSINFO,
+    deviceId: 'STRIP001',
+    model: 'HS300(US)',
+    children: [{ id: 'STRIP00100', alias: 'Lamp', state: 1 }],
+  });
+  try {
+    const tpClient = createClient({ client: realDriverOnPort(device.port) });
+
+    await assert.rejects(
+      () => tpClient.setPowerState('127.0.0.1', false, { expectedDeviceId: 'STRIP001', childId: 'STRIP00101' }),
+      (err) => {
+        assert.match(err.message, /Outlet not found on the strip at 127\.0\.0\.1: run a new scan/);
+        assert.equal(err.deviceReachable, true);
+        return true;
+      },
+    );
+    assert.equal(
+      device.state.requests.some((r) => r.system?.set_relay_state),
+      false,
+    );
   } finally {
     await device.close();
   }

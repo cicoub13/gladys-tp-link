@@ -4,7 +4,8 @@
 // Direct port of the core models (server/services/tp-link/lib/models):
 //   - IOT.SMARTPLUGSWITCH / IOT.RANGEEXTENDER.SMARTPLUG -> plug  (SWITCH/binary)
 //   - IOT.SMARTBULB                                     -> bulb  (LIGHT/binary)
-//   - a `children[]` strip                              -> unsupported (skipped)
+//   - a `children[]` strip                              -> one outlet (SWITCH/binary)
+//                                                          per child, see buildOutletDevices
 //   - anything else                                     -> unsupported (skipped)
 //
 // The external ids are built with the SDK so they are namespaced with the
@@ -38,14 +39,51 @@ export function classify(sysInfo) {
 }
 
 /**
+ * Expand an outlet id to the full form, the way the driver does: some strips
+ * report only the outlet index ('1' or '01'), others the strip serial plus it.
+ * @param {string} deviceId - The strip serial.
+ * @param {string} id - The outlet id as reported in `children[]`.
+ * @returns {string} The full outlet id.
+ * @example
+ * normalizeChildId('STRIP001', '01'); // 'STRIP00101'
+ */
+export function normalizeChildId(deviceId, id) {
+  if (id.length === 1) {
+    return `${deviceId}0${id}`;
+  }
+  if (id.length === 2) {
+    return `${deviceId}${id}`;
+  }
+  return id;
+}
+
+/**
+ * Find a strip outlet in a sysinfo, whatever form the strip reports its id in.
+ * @param {object} sysInfo - The TP-Link `sysinfo` object.
+ * @param {string} childId - The full outlet id.
+ * @returns {object|undefined} The `children[]` entry, or undefined when the
+ *   strip does not report that outlet.
+ * @example
+ * findChild(sysInfo, 'STRIP00101');
+ */
+export function findChild(sysInfo, childId) {
+  return sysInfo.children?.find((child) => normalizeChildId(sysInfo.deviceId, child.id) === childId);
+}
+
+/**
  * Read the ON/OFF state out of a sysinfo, given the device kind.
  * @param {string} kind - One of DEVICE_KINDS.
  * @param {object} sysInfo - The TP-Link `sysinfo` object.
- * @returns {number|undefined} 1 / 0, or undefined for an unsupported kind.
+ * @param {string} [childId] - The full outlet id, for an outlet.
+ * @returns {number|undefined} 1 / 0, or undefined for an unsupported kind or
+ *   an outlet the strip no longer reports.
  * @example
  * readOnOff(DEVICE_KINDS.PLUG, { relay_state: 1 }); // 1
  */
-export function readOnOff(kind, sysInfo) {
+export function readOnOff(kind, sysInfo, childId) {
+  if (kind === DEVICE_KINDS.OUTLET) {
+    return findChild(sysInfo, childId)?.state;
+  }
   if (kind === DEVICE_KINDS.PLUG) {
     return sysInfo.relay_state;
   }
@@ -74,6 +112,30 @@ export function assertExpectedDevice(sysInfo, expectedDeviceId, host) {
   if (expectedDeviceId && sysInfo?.deviceId !== expectedDeviceId) {
     const err = new Error(`Another device now answers at ${host}: run a new scan to refresh the addresses`);
     err.userFacing = true;
+    throw err;
+  }
+}
+
+/**
+ * Check that the strip still reports the outlet a command targets.
+ *
+ * Without it the driver throws `Could not find child with childId …`, which
+ * reads as an unreachable device although the strip answered: the outlet ids
+ * changed on the strip, and only a new scan picks them up. The error is flagged
+ * `deviceReachable` so the caller does not mark the device unreachable.
+ * @param {object} sysInfo - The `sysinfo` just read from the strip.
+ * @param {string} [childId] - The full outlet id; nothing is checked without it.
+ * @param {string} host - The strip IP address, for the message.
+ * @returns {void}
+ * @throws {Error} When the strip does not report that outlet.
+ * @example
+ * assertOutletPresent(sysInfo, 'STRIP00101', '192.168.1.13');
+ */
+export function assertOutletPresent(sysInfo, childId, host) {
+  if (childId && !findChild(sysInfo, childId)) {
+    const err = new Error(`Outlet not found on the strip at ${host}: run a new scan to refresh the outlets`);
+    err.userFacing = true;
+    err.deviceReachable = true;
     throw err;
   }
 }
@@ -138,4 +200,46 @@ export function buildDevice(gladys, sysInfo, host) {
 
   // Unsupported device type: no controllable feature, so nothing to publish.
   return { kind, device: null };
+}
+
+/**
+ * Build one Gladys discovery payload per outlet of a strip.
+ * @param {object} gladys - The GladysIntegration SDK instance.
+ * @param {object} sysInfo - The strip `sysinfo` object, with `children[]`.
+ * @param {string} host - The strip IP address.
+ * @returns {object[]} One payload per outlet.
+ * @example
+ * buildOutletDevices(gladys, stripSysInfo, '192.168.1.13');
+ */
+export function buildOutletDevices(gladys, sysInfo, host) {
+  const stripAlias = sysInfo.alias || sysInfo.dev_name || `TP-Link ${sysInfo.deviceId}`;
+  return sysInfo.children.map((child, index) => {
+    const childId = normalizeChildId(sysInfo.deviceId, child.id);
+    const ids = gladys.externalIds(DEVICE_KINDS.OUTLET, childId);
+    const name = child.alias || `${stripAlias} – Outlet ${index + 1}`;
+    return {
+      name,
+      external_id: ids.device,
+      // Polled by the integration's own timer, like a plug (see buildDevice).
+      params: [
+        { name: PARAMS.IP_ADDRESS, value: host },
+        { name: PARAMS.SERIAL_NUMBER, value: sysInfo.deviceId },
+        { name: PARAMS.MODEL, value: sysInfo.model || '' },
+        { name: PARAMS.CHILD_ID, value: childId },
+      ],
+      features: [
+        {
+          name: `${name} On/Off`,
+          external_id: ids.feature(FEATURE_KEYS.ON_OFF),
+          category: DEVICE_FEATURE_CATEGORIES.SWITCH,
+          type: DEVICE_FEATURE_TYPES.SWITCH.BINARY,
+          min: 0,
+          max: 1,
+          read_only: false,
+          has_feedback: true,
+          keep_history: true,
+        },
+      ],
+    };
+  });
 }
