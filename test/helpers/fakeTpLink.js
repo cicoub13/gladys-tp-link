@@ -4,14 +4,15 @@
 //   - getSysInfo(host)       -> returns the sysinfo mapped to that host, or throws;
 //                               counted per host in `sysInfoReads`
 //   - setPowerState(host,on) -> records the command; with a `childId`, switches
-//                               only that outlet of a strip, and keeps it
+//                               only that outlet of a strip, and keeps it;
+//                               refuses an outlet the strip does not report
 //
 // Also provides discoveryReply(): a real encrypted `udp-active-broadcast` scan
 // result for a sysinfo, so discovery tests exercise the actual codec.
 // -----------------------------------------------------------------------------
 
 import { encrypt } from 'tplink-smarthome-crypto';
-import { assertExpectedDevice } from '../../src/tplink/model.js';
+import { assertExpectedDevice, assertOutletPresent } from '../../src/tplink/model.js';
 
 /**
  * Build a raw scan reply the way the core relays it, with a genuinely encrypted
@@ -53,6 +54,9 @@ export function createFakeTpLink({ byHost = {} } = {}) {
     async setPowerState(host, on, { expectedDeviceId, childId } = {}) {
       const sysInfo = read(host);
       assertExpectedDevice(sysInfo, expectedDeviceId, host);
+      // Like the wrapper: an outlet the strip no longer reports is refused
+      // before anything is sent (the driver would throw at that point).
+      assertOutletPresent(sysInfo, childId, host);
       if (childId) {
         powerCommands.push({ host, on, childId });
         // Like the relay of a real strip: only the targeted outlet changes, and

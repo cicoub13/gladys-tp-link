@@ -73,8 +73,11 @@ export async function handleSetValue(gladys, tpClient, { device, feature, value 
     sysInfo = await tpClient.setPowerState(host, on, { expectedDeviceId: serial, childId });
   } catch (err) {
     logger.error(`Command on ${device.external_id} failed at ${host}`, err);
-    await publishDeviceTransport(gladys, full.external_id, TRANSPORTS.UNREACHABLE).catch((reportErr) => {
-      logger.error('Could not publish the unreachable transport', reportErr);
+    // The strip answered but no longer reports this outlet: it is reachable,
+    // a new scan is what is needed (the poll path publishes LOCAL too).
+    const transport = err.deviceReachable ? TRANSPORTS.LOCAL : TRANSPORTS.UNREACHABLE;
+    await publishDeviceTransport(gladys, full.external_id, transport).catch((reportErr) => {
+      logger.error(`Could not publish the ${transport} transport`, reportErr);
     });
     throw toUserFacingError(err, `TP-Link device unreachable at ${host}: check it is powered on and on your network`);
   }

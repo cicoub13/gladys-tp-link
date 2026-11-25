@@ -4,7 +4,7 @@ import net from 'node:net';
 import tplinkSmarthomeApi from 'tplink-smarthome-api';
 import { encryptWithHeader, decrypt } from 'tplink-smarthome-crypto';
 import { createClient } from '../src/tplink/client.js';
-import { PLUG_SYSINFO } from './helpers/fakeTpLink.js';
+import { PLUG_SYSINFO, POWER_STRIP_SYSINFO } from './helpers/fakeTpLink.js';
 
 // Stand-in for a `tplink-smarthome-api` Client: the wrapper takes one through
 // its `{ client }` injection hook, so the driver itself is never touched.
@@ -157,12 +157,23 @@ test('setPowerState commands when the serial matches', async () => {
 });
 
 test('setPowerState hands the outlet id to the driver device', async () => {
-  const driver = createFakeDriver();
+  const driver = createFakeDriver({ sysInfo: POWER_STRIP_SYSINFO });
   const tpClient = createClient({ client: driver });
 
   await tpClient.setPowerState('192.168.1.13', false, { childId: 'STRIP00101' });
 
   assert.equal(driver.sends.find((s) => s.op === 'set_power').childId, 'STRIP00101');
+});
+
+test('setPowerState matches an outlet the strip reports by its short id', async () => {
+  const driver = createFakeDriver({
+    sysInfo: { ...POWER_STRIP_SYSINFO, children: [{ id: '01', alias: 'TV', state: 0 }] },
+  });
+  const tpClient = createClient({ client: driver });
+
+  await tpClient.setPowerState('192.168.1.13', true, { childId: 'STRIP00101' });
+
+  assert.ok(driver.sends.some((s) => s.op === 'set_power'));
 });
 
 test('getSysInfo shares one request between callers while it is in flight', async () => {
@@ -279,6 +290,33 @@ test('with the real driver, an outlet command carries only that outlet id', asyn
 
     const command = device.state.requests.find((r) => r.system?.set_relay_state);
     assert.deepEqual(command, { context: { child_ids: ['STRIP00101'] }, system: { set_relay_state: { state: 0 } } });
+  } finally {
+    await device.close();
+  }
+});
+
+test('with the real driver, a command on an outlet the strip no longer reports sends nothing and asks for a new scan', async () => {
+  const device = await startFakeKasaDevice({
+    ...FULL_PLUG_SYSINFO,
+    deviceId: 'STRIP001',
+    model: 'HS300(US)',
+    children: [{ id: 'STRIP00100', alias: 'Lamp', state: 1 }],
+  });
+  try {
+    const tpClient = createClient({ client: realDriverOnPort(device.port) });
+
+    await assert.rejects(
+      () => tpClient.setPowerState('127.0.0.1', false, { expectedDeviceId: 'STRIP001', childId: 'STRIP00101' }),
+      (err) => {
+        assert.match(err.message, /Outlet not found on the strip at 127\.0\.0\.1: run a new scan/);
+        assert.equal(err.deviceReachable, true);
+        return true;
+      },
+    );
+    assert.equal(
+      device.state.requests.some((r) => r.system?.set_relay_state),
+      false,
+    );
   } finally {
     await device.close();
   }

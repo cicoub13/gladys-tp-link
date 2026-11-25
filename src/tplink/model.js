@@ -58,6 +58,19 @@ export function normalizeChildId(deviceId, id) {
 }
 
 /**
+ * Find a strip outlet in a sysinfo, whatever form the strip reports its id in.
+ * @param {object} sysInfo - The TP-Link `sysinfo` object.
+ * @param {string} childId - The full outlet id.
+ * @returns {object|undefined} The `children[]` entry, or undefined when the
+ *   strip does not report that outlet.
+ * @example
+ * findChild(sysInfo, 'STRIP00101');
+ */
+export function findChild(sysInfo, childId) {
+  return sysInfo.children?.find((child) => normalizeChildId(sysInfo.deviceId, child.id) === childId);
+}
+
+/**
  * Read the ON/OFF state out of a sysinfo, given the device kind.
  * @param {string} kind - One of DEVICE_KINDS.
  * @param {object} sysInfo - The TP-Link `sysinfo` object.
@@ -69,7 +82,7 @@ export function normalizeChildId(deviceId, id) {
  */
 export function readOnOff(kind, sysInfo, childId) {
   if (kind === DEVICE_KINDS.OUTLET) {
-    return sysInfo.children?.find((child) => normalizeChildId(sysInfo.deviceId, child.id) === childId)?.state;
+    return findChild(sysInfo, childId)?.state;
   }
   if (kind === DEVICE_KINDS.PLUG) {
     return sysInfo.relay_state;
@@ -99,6 +112,30 @@ export function assertExpectedDevice(sysInfo, expectedDeviceId, host) {
   if (expectedDeviceId && sysInfo?.deviceId !== expectedDeviceId) {
     const err = new Error(`Another device now answers at ${host}: run a new scan to refresh the addresses`);
     err.userFacing = true;
+    throw err;
+  }
+}
+
+/**
+ * Check that the strip still reports the outlet a command targets.
+ *
+ * Without it the driver throws `Could not find child with childId …`, which
+ * reads as an unreachable device although the strip answered: the outlet ids
+ * changed on the strip, and only a new scan picks them up. The error is flagged
+ * `deviceReachable` so the caller does not mark the device unreachable.
+ * @param {object} sysInfo - The `sysinfo` just read from the strip.
+ * @param {string} [childId] - The full outlet id; nothing is checked without it.
+ * @param {string} host - The strip IP address, for the message.
+ * @returns {void}
+ * @throws {Error} When the strip does not report that outlet.
+ * @example
+ * assertOutletPresent(sysInfo, 'STRIP00101', '192.168.1.13');
+ */
+export function assertOutletPresent(sysInfo, childId, host) {
+  if (childId && !findChild(sysInfo, childId)) {
+    const err = new Error(`Outlet not found on the strip at ${host}: run a new scan to refresh the outlets`);
+    err.userFacing = true;
+    err.deviceReachable = true;
     throw err;
   }
 }

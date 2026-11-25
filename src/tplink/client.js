@@ -13,7 +13,7 @@
 // tplink-smarthome-api is a CommonJS module: import the default and destructure
 // (its named exports are not statically detectable by Node's ESM interop).
 import tplinkSmarthomeApi from 'tplink-smarthome-api';
-import { assertExpectedDevice } from './model.js';
+import { assertExpectedDevice, assertOutletPresent } from './model.js';
 
 const { Client } = tplinkSmarthomeApi;
 
@@ -89,6 +89,9 @@ export function createClient({
 
       const sysInfo = await client.getSysInfo(host, undefined, nextSendOptions());
       assertExpectedDevice(sysInfo, expectedDeviceId, host);
+      // Checked here rather than left to the driver, whose own error would
+      // read as an unreachable strip.
+      assertOutletPresent(sysInfo, childId, host);
       // Handing the sysinfo over lets the driver pick its device class without
       // another round-trip. With a childId, the driver adds
       // `context.child_ids` to the frame so only that outlet switches.

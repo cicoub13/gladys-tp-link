@@ -226,14 +226,20 @@ test('an outlet command publishes the requested state when the read-back is miss
   assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: lamp.features[0].external_id, state: 0 }]);
 });
 
-test('an outlet command publishes the requested state when the strip no longer reports the outlet', async () => {
+test('an outlet command the strip no longer reports asks for a new scan, without flagging the outlet unreachable', async () => {
   const gladys = createFakeGladys();
   const [lamp] = buildOutletDevices(gladys, POWER_STRIP_SYSINFO, STRIP_HOST);
-  const tpClient = { setPowerState: async () => ({ ...POWER_STRIP_SYSINFO, children: [] }) };
+  const tpClient = createFakeTpLink({
+    byHost: { [STRIP_HOST]: { ...POWER_STRIP_SYSINFO, children: POWER_STRIP_SYSINFO.children.slice(1) } },
+  });
 
-  await handleSetValue(gladys, tpClient, { device: lamp, feature: lamp.features[0], value: 1 });
-
-  assert.deepEqual(gladys.fake.states, [{ device_feature_external_id: lamp.features[0].external_id, state: 1 }]);
+  await assert.rejects(
+    () => handleSetValue(gladys, tpClient, { device: lamp, feature: lamp.features[0], value: 1 }),
+    /Outlet not found on the strip at 192\.168\.1\.13: run a new scan/,
+  );
+  assert.equal(tpClient.powerCommands.length, 0);
+  assert.equal(gladys.fake.states.length, 0);
+  assert.deepEqual(gladys.fake.transports, [{ device_external_id: lamp.external_id, transport: TRANSPORTS.LOCAL }]);
 });
 
 test('an outlet command sends nothing when another device answers at the strip address', async () => {
